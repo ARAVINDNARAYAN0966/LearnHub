@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+/.tsupgrader/runtime-validation/
 
 # debug
 npm-debug.log*
