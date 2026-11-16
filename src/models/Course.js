@@ -220,6 +220,15 @@ const courseSchema = new mongoose.Schema(
       required: true,
       default: false,
     },
+    deleting: {
+      type: Boolean,
+      select: false,
+    },
+    enrollmentReservations: {
+      type: Number,
+      min: 0,
+      select: false,
+    },
   },
   { timestamps: true },
 );

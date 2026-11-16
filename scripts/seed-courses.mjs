@@ -27,7 +27,7 @@ function toCourseDocument(course) {
       title,
       summary,
     })),
-    published: true,
+    published: false,
   };
 }
 
@@ -43,7 +43,7 @@ async function seedCourses() {
 
     const seedTimestamp = new Date();
     const operations = courses.map((course) => {
-      const { modules, ...courseFields } = toCourseDocument(course);
+      const { modules, published, ...courseFields } = toCourseDocument(course);
       return {
         updateOne: {
           filter: { slug: course.slug },
@@ -51,6 +51,7 @@ async function seedCourses() {
             $set: courseFields,
             $setOnInsert: {
               modules,
+              published,
               createdAt: seedTimestamp,
               updatedAt: seedTimestamp,
             },

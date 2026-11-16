@@ -7,6 +7,7 @@ import { getCurrentUser } from "../../../../lib/auth";
 import {
   getProgressSummary,
   getPublishedLessons,
+  PublishedLessonUnavailableError,
   recordLessonAccess,
 } from "../../../../lib/lesson-progress";
 import { connectToDatabase } from "../../../../lib/mongodb";
@@ -64,11 +65,16 @@ async function LessonDetails({ params }) {
   if (lessonIndex < 0) notFound();
 
   const lesson = lessons[lessonIndex];
-  await recordLessonAccess({
-    userId: user.id,
-    courseId: course._id,
-    lessonId: lesson.id,
-  });
+  try {
+    await recordLessonAccess({
+      userId: user.id,
+      courseId: course._id,
+      lessonId: lesson.id,
+    });
+  } catch (error) {
+    if (error instanceof PublishedLessonUnavailableError) notFound();
+    throw error;
+  }
   const progress = await getProgressSummary(user.id, course);
   const lessonProgress = progress.lessons.find((item) => item.id === lesson.id);
   const previousLesson = lessons[lessonIndex - 1] ?? null;

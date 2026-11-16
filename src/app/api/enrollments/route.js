@@ -1,10 +1,12 @@
 import mongoose from "mongoose";
-import Course from "../../../models/Course";
 import Enrollment from "../../../models/Enrollment";
 import { getCurrentUser } from "../../../lib/auth";
 import { authJson, logAuthFailure } from "../../../lib/auth-http";
+import {
+  CourseEnrollmentUnavailableError,
+  createCourseEnrollment,
+} from "../../../lib/course-write-coordination";
 import { getUserEnrollments } from "../../../lib/enrollment-data";
-import { connectToDatabase } from "../../../lib/mongodb";
 
 function databaseFailureStatus(error) {
   return error?.name === "MongooseServerSelectionError" ? 503 : 500;
@@ -71,23 +73,7 @@ export async function POST(request) {
   }
 
   try {
-    await connectToDatabase();
-    const course = await Course.findOne({
-      _id: courseId,
-      published: true,
-    })
-      .select("_id")
-      .lean();
-
-    if (!course) {
-      return authJson({ error: "Course not found or unavailable." }, 404);
-    }
-
-    await Enrollment.init();
-    const enrollment = await Enrollment.create({
-      user: user.id,
-      course: course._id,
-    });
+    const enrollment = await createCourseEnrollment(user.id, courseId);
 
     return authJson(
       {
@@ -103,6 +89,9 @@ export async function POST(request) {
       201,
     );
   } catch (error) {
+    if (error instanceof CourseEnrollmentUnavailableError) {
+      return authJson({ error: error.message }, 404);
+    }
     if (error?.code === 11000) {
       return authJson(
         { error: "An enrollment record already exists for this course." },

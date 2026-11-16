@@ -1,5 +1,7 @@
 import "server-only";
 
+import mongoose from "mongoose";
+import Course from "../models/Course";
 import Enrollment from "../models/Enrollment";
 import LessonProgress from "../models/LessonProgress";
 import {
@@ -9,6 +11,13 @@ import {
 import { connectToDatabase } from "./mongodb";
 
 export { getPublishedLessons } from "./lesson-utils";
+
+export class PublishedLessonUnavailableError extends Error {
+  constructor() {
+    super("The lesson is no longer published.");
+    this.name = "PublishedLessonUnavailableError";
+  }
+}
 
 export async function getProgressSummaries(userId, courses) {
   await connectToDatabase();
@@ -68,17 +77,51 @@ export async function recordLessonAccess({
   const now = new Date();
 
   if (!record) {
+    const session = await mongoose.startSession();
+    let createdRecord = null;
     try {
-      return await LessonProgress.create({
-        ...filter,
-        completed,
-        completedAt: completed ? now : null,
-        lastAccessedAt: now,
+      await session.withTransaction(async () => {
+        createdRecord = null;
+        const courseUpdate = await Course.updateOne(
+          {
+            _id: courseId,
+            published: true,
+            modules: {
+              $elemMatch: {
+                lessons: { $elemMatch: { _id: lessonId, published: true } },
+              },
+            },
+          },
+          { $inc: { __v: 1 } },
+          { timestamps: false, session },
+        );
+        if (courseUpdate.matchedCount !== 1) {
+          throw new PublishedLessonUnavailableError();
+        }
+
+        [createdRecord] = await LessonProgress.create(
+          [
+            {
+              ...filter,
+              completed,
+              completedAt: completed ? now : null,
+              lastAccessedAt: now,
+            },
+          ],
+          { session },
+        );
       });
     } catch (error) {
       if (error?.code !== 11000) throw error;
       record = await LessonProgress.findOne(filter);
       if (!record) throw error;
+    } finally {
+      await session.endSession();
+    }
+
+    if (createdRecord) return createdRecord;
+    if (!record) {
+      throw new Error("Lesson progress was not created or recovered.");
     }
   }
 

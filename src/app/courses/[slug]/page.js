@@ -44,29 +44,44 @@ async function CourseDetails({ params }) {
   const curriculumResult = user
     ? await getCourseCurriculumForUser(user, course.id)
     : null;
+  const hasCurriculumAccess = curriculumResult?.access.allowed === true;
   const enrolledModules =
-    curriculumResult?.access.allowed === true ? curriculumResult.modules : [];
+    hasCurriculumAccess ? curriculumResult.modules : [];
   const enrollmentStatus = curriculumResult?.enrollmentStatus ?? null;
   const publishedLessonIds = enrolledModules.flatMap((module) =>
     module.lessons.map((lesson) => lesson.id),
   );
-  let continueLessonId = publishedLessonIds[0] ?? null;
-  if (
-    user &&
-    curriculumResult?.access.allowed &&
-    publishedLessonIds.length > 0
-  ) {
-    const lastUnfinishedLesson = await LessonProgress.findOne({
+  const completedLessonIds = new Set();
+  let continueLessonId = null;
+  let isCourseComplete = false;
+  if (user && hasCurriculumAccess && publishedLessonIds.length > 0) {
+    const progressRecords = await LessonProgress.find({
       user: user.id,
       course: course.id,
       lessonId: { $in: publishedLessonIds },
-      completed: false,
     })
-      .sort({ lastAccessedAt: -1 })
-      .select("lessonId")
+      .select("lessonId completed lastAccessedAt")
       .lean();
-    if (lastUnfinishedLesson) {
-      continueLessonId = lastUnfinishedLesson.lessonId.toString();
+    progressRecords.forEach((record) => {
+      if (record.completed) {
+        completedLessonIds.add(record.lessonId.toString());
+      }
+    });
+    const lastUnfinishedLesson = progressRecords
+      .filter((record) => !record.completed)
+      .sort(
+        (left, right) =>
+          new Date(right.lastAccessedAt) - new Date(left.lastAccessedAt),
+      )[0];
+    continueLessonId =
+      lastUnfinishedLesson?.lessonId.toString() ||
+      publishedLessonIds.find((id) => !completedLessonIds.has(id)) ||
+      null;
+    isCourseComplete =
+      publishedLessonIds.length > 0 &&
+      completedLessonIds.size === publishedLessonIds.length;
+    if (isCourseComplete) {
+      continueLessonId = null;
     }
   }
   const courses = await getPublishedCourses();
@@ -112,32 +127,59 @@ async function CourseDetails({ params }) {
             <h2>Course curriculum</h2>
             <p className="curriculum-summary">{course.lessons} lessons <span>·</span> {course.duration} <span>·</span> Learn anytime</p>
             <div className="curriculum-list">
-              {course.curriculum.map(([number, title, description]) => {
+              {course.curriculum.length === 0 ? (
+                <p className="curriculum-empty">
+                  Course curriculum is being prepared. Published modules will appear here.
+                </p>
+              ) : course.curriculum.map(
+                ([number, title, description, publishedLessonCount]) => {
                 const lessons =
                   enrolledModules.find((module) => module.number === number)
                     ?.lessons ?? [];
 
                 return (
-                  <div className="curriculum-module" key={number}>
+                  <section className="curriculum-module" key={number}>
                     <div className="curriculum-row">
                       <span className="curriculum-number">{number}</span>
                       <strong>{title}</strong>
                       <span>{description}</span>
-                      <span className="curriculum-plus" aria-hidden="true">
-                        {lessons.length ? "−" : "+"}
+                      <span
+                        className={`curriculum-lock-state${hasCurriculumAccess ? " curriculum-lock-state-open" : ""}`}
+                      >
+                        {hasCurriculumAccess
+                          ? `${lessons.length} ${lessons.length === 1 ? "lesson" : "lessons"}`
+                          : "Locked"}
                       </span>
                     </div>
-                    {lessons.length > 0 && (
+                    {hasCurriculumAccess && lessons.length > 0 ? (
                       <ul className="curriculum-lessons">
                         {lessons.map((lesson) => (
                           <li key={lesson.id}>
                             <Link
                               href={`/learn/${course.slug}/${lesson.id}`}
-                              className="curriculum-lesson-link"
+                              className={`curriculum-lesson-link${completedLessonIds.has(lesson.id) ? " curriculum-lesson-completed" : ""}${lesson.id === continueLessonId ? " curriculum-lesson-current" : ""}`}
+                              aria-current={
+                                lesson.id === continueLessonId ? "step" : undefined
+                              }
                             >
-                              <span>{lesson.title}</span>
+                              <span className="curriculum-lesson-title">
+                                <span aria-hidden="true">
+                                  {completedLessonIds.has(lesson.id)
+                                    ? "✓"
+                                    : lesson.id === continueLessonId
+                                      ? "▶"
+                                      : "○"}
+                                </span>
+                                {lesson.title}
+                              </span>
                               <span>
-                                {lesson.type}
+                                {completedLessonIds.has(lesson.id)
+                                  ? "Completed"
+                                  : lesson.id === continueLessonId
+                                    ? "Current lesson"
+                                    : "Not started"}
+                                {" · "}
+                                {lesson.type === "article" ? "Text" : lesson.type}
                                 {lesson.durationMinutes
                                   ? ` · ${lesson.durationMinutes} min`
                                   : ""}
@@ -146,10 +188,21 @@ async function CourseDetails({ params }) {
                           </li>
                         ))}
                       </ul>
+                    ) : !hasCurriculumAccess ? (
+                      <p className="curriculum-locked-note">
+                        <span aria-hidden="true">🔒</span>
+                        Enroll to unlock {publishedLessonCount} published{" "}
+                        {publishedLessonCount === 1 ? "lesson" : "lessons"}.
+                      </p>
+                    ) : (
+                      <p className="curriculum-empty-module">
+                        No published lessons are available in this module.
+                      </p>
                     )}
-                  </div>
+                  </section>
                 );
-              })}
+              },
+            )}
             </div>
           </section>
           <section className="instructor-panel detail-panel">
@@ -169,6 +222,7 @@ async function CourseDetails({ params }) {
               lessonId={continueLessonId}
               isAuthenticated={Boolean(user)}
               enrollmentStatus={enrollmentStatus}
+              isCourseComplete={isCourseComplete}
             />
             <p className="enroll-includes">✓ Lifetime access<br />✓ Lessons you can revisit<br />✓ Learn on any device</p>
             <div className="enroll-facts"><span>◷ &nbsp;{course.duration} of lessons</span><span>▤ &nbsp;{course.lessons} bite-sized lessons</span><span>◎ &nbsp;{course.students} learners</span></div>

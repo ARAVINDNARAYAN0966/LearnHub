@@ -1,7 +1,17 @@
 import bcrypt from "bcryptjs";
 import User from "../../../../models/User";
-import { assertSessionConfiguration, issueSession } from "../../../../lib/auth";
-import { authJson, logAuthFailure } from "../../../../lib/auth-http";
+import { assertSessionConfiguration } from "../../../../lib/auth";
+import {
+  authJson,
+  logAuthFailure,
+  parseAuthJsonBody,
+} from "../../../../lib/auth-http";
+import {
+  AUTH_RATE_LIMITS,
+  authRateLimitResponse,
+  consumeAuthRateLimit,
+  getAuthClientAddress,
+} from "../../../../lib/auth-rate-limit";
 import { connectToDatabase } from "../../../../lib/mongodb";
 
 const BCRYPT_WORK_FACTOR = 12;
@@ -17,27 +27,35 @@ function validationResponse(fieldErrors) {
   );
 }
 
-function conflictResponse() {
+function registrationAcceptedResponse() {
   return authJson(
     {
-      error: "An account with this email already exists.",
-      fieldErrors: { email: "An account with this email already exists." },
+      message:
+        "If registration can be completed for this address, you can now try signing in.",
     },
-    409,
+    202,
   );
 }
 
 export async function POST(request) {
-  let body;
   try {
-    body = await request.json();
-  } catch {
-    return authJson({ error: "Invalid request body." }, 400);
+    assertSessionConfiguration();
+    const ipLimit = await consumeAuthRateLimit(
+      AUTH_RATE_LIMITS.registrationIp,
+      `ip:${getAuthClientAddress(request)}`,
+    );
+    if (!ipLimit.allowed) return authRateLimitResponse(ipLimit);
+  } catch (error) {
+    logAuthFailure("Registration rate limiting", error);
+    return authJson(
+      { error: "Unable to create your account right now." },
+      error?.name === "MongooseServerSelectionError" ? 503 : 500,
+    );
   }
 
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    return authJson({ error: "Invalid request body." }, 400);
-  }
+  const parsed = await parseAuthJsonBody(request);
+  if (parsed.response) return parsed.response;
+  const body = parsed.body;
 
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const email =
@@ -82,39 +100,21 @@ export async function POST(request) {
   }
 
   try {
-    assertSessionConfiguration();
     await connectToDatabase();
     await User.init();
 
-    if (await User.exists({ email })) {
-      return conflictResponse();
-    }
-
     const passwordHash = await bcrypt.hash(password, BCRYPT_WORK_FACTOR);
-    const user = await User.create({
+    await User.create({
       name,
       email,
       username: username || undefined,
       passwordHash,
     });
 
-    await issueSession(user._id.toString());
-
-    return authJson(
-      {
-        user: {
-          id: user._id.toString(),
-          name: user.name,
-          email: user.email,
-          username: user.username || null,
-          role: user.role,
-        },
-      },
-      201,
-    );
+    return registrationAcceptedResponse();
   } catch (error) {
     if (error?.code === 11000) {
-      return conflictResponse();
+      return registrationAcceptedResponse();
     }
 
     logAuthFailure("Registration", error);

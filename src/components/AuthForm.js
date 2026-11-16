@@ -185,6 +185,19 @@ export default function AuthForm({ mode = "login" }) {
         return;
       }
 
+      if (isRegister) {
+        setValues(initialValues);
+        setTouched({});
+        setSubmitted(false);
+        setFeedback({
+          type: "success",
+          message:
+            result?.message ||
+            "If registration can be completed for this address, you can now try signing in.",
+        });
+        return;
+      }
+
       window.dispatchEvent(new Event("learnhub:auth-changed"));
       router.push("/dashboard");
     } catch {

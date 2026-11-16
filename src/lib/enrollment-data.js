@@ -2,6 +2,10 @@ import "server-only";
 
 import Enrollment from "../models/Enrollment";
 import { getProgressSummaries } from "./lesson-progress";
+import {
+  getEnrollmentDisplayStatus,
+  getPublishedLessonStats,
+} from "./lesson-utils";
 import { connectToDatabase } from "./mongodb";
 
 const COURSE_FIELDS =
@@ -9,6 +13,7 @@ const COURSE_FIELDS =
 
 function toCourseData(course) {
   if (!course) return null;
+  const lessonStats = getPublishedLessonStats(course);
 
   return {
     id: course._id.toString(),
@@ -21,12 +26,12 @@ function toCourseData(course) {
     originalPrice: course.originalPrice,
     currency: course.currency,
     image: course.image,
-    duration: course.duration,
+    duration: lessonStats.duration,
     rating: course.rating,
     reviews: course.reviews,
     level: course.level,
     color: course.color,
-    lessons: course.lessons,
+    lessons: lessonStats.lessons,
   };
 }
 
@@ -51,7 +56,7 @@ export async function getUserEnrollments(userId) {
     return {
       id: enrollment._id.toString(),
       enrolledAt: enrollment.enrolledAt.toISOString(),
-      status: enrollment.status,
+      status: getEnrollmentDisplayStatus(enrollment.status, progress),
       progressPercentage: progress?.progressPercentage ?? 0,
       completedLessons: progress?.completedLessons ?? 0,
       totalLessons: progress?.totalPublishedLessons ?? 0,

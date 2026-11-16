@@ -1,7 +1,17 @@
 import bcrypt from "bcryptjs";
 import User from "../../../../models/User";
 import { assertSessionConfiguration, issueSession } from "../../../../lib/auth";
-import { authJson, logAuthFailure } from "../../../../lib/auth-http";
+import {
+  authJson,
+  logAuthFailure,
+  parseAuthJsonBody,
+} from "../../../../lib/auth-http";
+import {
+  AUTH_RATE_LIMITS,
+  authRateLimitResponse,
+  consumeAuthRateLimit,
+  getAuthClientAddress,
+} from "../../../../lib/auth-rate-limit";
 import { connectToDatabase } from "../../../../lib/mongodb";
 
 const BCRYPT_WORK_FACTOR = 12;
@@ -9,20 +19,44 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVALID_CREDENTIALS = { error: "Invalid email or password." };
 
 export async function POST(request) {
-  let body;
   try {
-    body = await request.json();
-  } catch {
-    return authJson({ error: "Invalid request body." }, 400);
+    assertSessionConfiguration();
+    const ipLimit = await consumeAuthRateLimit(
+      AUTH_RATE_LIMITS.loginIp,
+      `ip:${getAuthClientAddress(request)}`,
+    );
+    if (!ipLimit.allowed) return authRateLimitResponse(ipLimit);
+  } catch (error) {
+    logAuthFailure("Login rate limiting", error);
+    return authJson(
+      { error: "Unable to sign in right now." },
+      error?.name === "MongooseServerSelectionError" ? 503 : 500,
+    );
   }
 
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    return authJson({ error: "Invalid request body." }, 400);
-  }
+  const parsed = await parseAuthJsonBody(request);
+  if (parsed.response) return parsed.response;
+  const body = parsed.body;
 
   const email =
     typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";
+
+  if (EMAIL_PATTERN.test(email) && email.length <= 254) {
+    try {
+      const accountLimit = await consumeAuthRateLimit(
+        AUTH_RATE_LIMITS.loginAccount,
+        `email:${email}`,
+      );
+      if (!accountLimit.allowed) return authRateLimitResponse(accountLimit);
+    } catch (error) {
+      logAuthFailure("Login account rate limiting", error);
+      return authJson(
+        { error: "Unable to sign in right now." },
+        error?.name === "MongooseServerSelectionError" ? 503 : 500,
+      );
+    }
+  }
 
   if (
     !EMAIL_PATTERN.test(email) ||
@@ -34,7 +68,6 @@ export async function POST(request) {
   }
 
   try {
-    assertSessionConfiguration();
     await connectToDatabase();
 
     const user = await User.findOne({ email }).select("+passwordHash");

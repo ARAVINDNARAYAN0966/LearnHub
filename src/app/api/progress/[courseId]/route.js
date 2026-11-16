@@ -6,6 +6,7 @@ import { authJson, logAuthFailure } from "../../../../lib/auth-http";
 import {
   getProgressSummary,
   getPublishedLessons,
+  PublishedLessonUnavailableError,
   recordLessonAccess,
   updateEnrollmentProgress,
 } from "../../../../lib/lesson-progress";
@@ -140,6 +141,12 @@ export async function POST(request, { params }) {
       },
     });
   } catch (error) {
+    if (error instanceof PublishedLessonUnavailableError) {
+      return authJson(
+        { error: "Published lesson not found in this course." },
+        404,
+      );
+    }
     logAuthFailure("Lesson progress update", error);
     return authJson(
       { error: "Unable to update lesson progress right now." },

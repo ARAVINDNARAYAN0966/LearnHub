@@ -10,6 +10,7 @@ export default function CourseEnrollmentAction({
   lessonId,
   isAuthenticated,
   enrollmentStatus,
+  isCourseComplete = false,
 }) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -28,16 +29,24 @@ export default function CourseEnrollmentAction({
 
   if (enrollmentStatus === "active" || enrollmentStatus === "completed") {
     return (
-      <Link
-        className="button button-primary enroll-button"
-        href={
-          lessonId
-            ? `/learn/${courseSlug}/${lessonId}`
-            : `/courses/${courseSlug}#curriculum`
-        }
-      >
-        Continue Learning <span aria-hidden="true">↗</span>
-      </Link>
+      <>
+        {isCourseComplete && (
+          <p className="lesson-completed enroll-course-completed" role="status">
+            <span aria-hidden="true">✓</span> All published lessons completed
+          </p>
+        )}
+        <Link
+          className="button button-primary enroll-button"
+          href={
+            lessonId
+              ? `/learn/${courseSlug}/${lessonId}`
+              : `/courses/${courseSlug}#curriculum`
+          }
+        >
+          {isCourseComplete ? "Review curriculum" : "Continue Learning"}{" "}
+          <span aria-hidden="true">↗</span>
+        </Link>
+      </>
     );
   }
 

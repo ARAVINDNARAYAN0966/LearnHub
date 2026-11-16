@@ -39,3 +39,11 @@ export function getCurriculumManagementAccess(user) {
 
   return { allowed: true, status: 200 };
 }
+
+export function getAdminDashboardRedirect(user) {
+  if (!user) {
+    return "/login";
+  }
+
+  return getCurriculumManagementAccess(user).allowed ? null : "/dashboard";
+}

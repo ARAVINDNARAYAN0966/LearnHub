@@ -15,6 +15,8 @@ const LESSON_KEYS = [
   "published",
 ];
 const LESSON_TYPES = new Set(["article", "video", "quiz"]);
+const MAX_MODULES = 100;
+const MAX_LESSONS = 1000;
 
 export class CurriculumInputError extends Error {}
 
@@ -170,5 +172,175 @@ export function validateCurriculumAppend(body, existingModule = null) {
     moduleTitle,
     moduleDescription,
     lessons,
+  };
+}
+
+export function validateCurriculumUpdate(body, existingModules = []) {
+  assertObject(body, "Request body");
+  assertAllowedKeys(body, ["version", "modules"], "Request body");
+
+  if (!Number.isSafeInteger(body.version) || body.version < 0) {
+    throw new CurriculumInputError("Curriculum version is invalid.");
+  }
+  if (!Array.isArray(body.modules) || body.modules.length > MAX_MODULES) {
+    throw new CurriculumInputError(
+      `Provide no more than ${MAX_MODULES} modules.`,
+    );
+  }
+
+  const existingLessonIds = new Set();
+  for (const existingModule of existingModules) {
+    for (const lesson of existingModule.lessons || []) {
+      if (lesson._id) existingLessonIds.add(lesson._id.toString().toLowerCase());
+    }
+  }
+
+  const moduleNumbers = new Set();
+  const lessonIds = new Set();
+  let totalLessons = 0;
+  const modules = body.modules.map((moduleData) => {
+    assertObject(moduleData, "Module");
+    assertAllowedKeys(
+      moduleData,
+      ["number", "title", "description", "lessons"],
+      "Module",
+    );
+
+    const number = requiredText(moduleData.number, "Module number", 20);
+    if (moduleNumbers.has(number)) {
+      throw new CurriculumInputError("Module numbers must be unique.");
+    }
+    moduleNumbers.add(number);
+
+    const title = requiredText(moduleData.title, "Module title", 200);
+    const description = optionalText(
+      moduleData.description,
+      "Module description",
+      2000,
+    );
+    if (!Array.isArray(moduleData.lessons)) {
+      throw new CurriculumInputError("Module lessons must be an array.");
+    }
+
+    totalLessons += moduleData.lessons.length;
+    if (totalLessons > MAX_LESSONS) {
+      throw new CurriculumInputError(
+        `Provide no more than ${MAX_LESSONS} lessons.`,
+      );
+    }
+
+    const orders = new Set();
+    const lessons = moduleData.lessons.map((lesson) => {
+      assertObject(lesson, "Lesson");
+      assertAllowedKeys(
+        lesson,
+        [
+          "id",
+          "title",
+          "description",
+          "type",
+          "content",
+          "videoUrl",
+          "durationMinutes",
+          "order",
+          "published",
+        ],
+        "Lesson",
+      );
+
+      let id = null;
+      if (lesson.id !== undefined) {
+        if (
+          typeof lesson.id !== "string" ||
+          !/^[\da-f]{24}$/i.test(lesson.id)
+        ) {
+          throw new CurriculumInputError("Lesson ID is invalid.");
+        }
+        id = lesson.id.toLowerCase();
+        if (!existingLessonIds.has(id)) {
+          throw new CurriculumInputError(
+            "Existing lesson IDs cannot be replaced or moved from another course.",
+          );
+        }
+        if (lessonIds.has(id)) {
+          throw new CurriculumInputError("Lesson IDs must be unique.");
+        }
+        lessonIds.add(id);
+      }
+
+      const title = requiredText(lesson.title, "Lesson title", 200);
+      const description = optionalText(
+        lesson.description,
+        "Lesson description",
+        2000,
+      );
+      if (!LESSON_TYPES.has(lesson.type)) {
+        throw new CurriculumInputError(
+          "Lesson type must be text (article), video, or quiz.",
+        );
+      }
+      const content = optionalText(lesson.content, "Lesson content", 100000);
+      const videoUrl = validateVideoUrl(lesson.videoUrl);
+      const durationMinutes = lesson.durationMinutes;
+      const order = lesson.order;
+      const published = lesson.published;
+
+      if (
+        !Number.isInteger(durationMinutes) ||
+        durationMinutes < 0 ||
+        durationMinutes > 1440
+      ) {
+        throw new CurriculumInputError(
+          "Lesson duration must be a whole number from 0 to 1440 minutes.",
+        );
+      }
+      if (!Number.isInteger(order) || order < 0 || order > 10000) {
+        throw new CurriculumInputError(
+          "Lesson order must be a whole number from 0 to 10000.",
+        );
+      }
+      if (orders.has(order)) {
+        throw new CurriculumInputError(
+          "Lesson order values must be unique within the module.",
+        );
+      }
+      orders.add(order);
+      if (typeof published !== "boolean") {
+        throw new CurriculumInputError(
+          "Lesson publication status must be boolean.",
+        );
+      }
+      if (
+        published &&
+        (lesson.type === "video" ? !content && !videoUrl : !content)
+      ) {
+        throw new CurriculumInputError(
+          "Published lessons must include their lesson material.",
+        );
+      }
+
+      return {
+        id,
+        title,
+        description,
+        type: lesson.type,
+        content,
+        videoUrl,
+        durationMinutes,
+        order,
+        published,
+      };
+    });
+
+    lessons.sort((left, right) => left.order - right.order);
+    return { number, title, description, lessons };
+  });
+
+  return {
+    version: body.version,
+    modules,
+    removedLessonIds: [...existingLessonIds].filter(
+      (id) => !lessonIds.has(id),
+    ),
   };
 }
