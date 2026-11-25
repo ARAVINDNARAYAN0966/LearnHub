@@ -199,6 +199,7 @@ export default function AuthForm({ mode = "login" }) {
       }
 
       window.dispatchEvent(new Event("learnhub:auth-changed"));
+      router.refresh();
       router.push("/dashboard");
     } catch {
       setFeedback({

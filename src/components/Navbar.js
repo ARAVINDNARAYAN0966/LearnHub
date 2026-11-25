@@ -101,6 +101,24 @@ export default function Navbar() {
           <div className="nav-actions">
             {currentUser ? (
               <>
+                {currentUser.role === "admin" && (
+                  <Link
+                    className="nav-login font-semibold text-amber-600 dark:text-amber-400"
+                    href="/admin"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Admin
+                  </Link>
+                )}
+                {currentUser.role === "instructor" && (
+                  <Link
+                    className="nav-login font-semibold text-amber-600 dark:text-amber-400"
+                    href="/instructor"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Teaching
+                  </Link>
+                )}
                 <Link
                   className="nav-login"
                   href="/dashboard"

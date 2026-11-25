@@ -4,6 +4,7 @@ const { AuthRateLimit, connectToDatabase } = vi.hoisted(() => ({
   AuthRateLimit: {
     init: vi.fn(),
     findOneAndUpdate: vi.fn(),
+    deleteOne: vi.fn(),
     collection: { createIndex: vi.fn() },
   },
   connectToDatabase: vi.fn(),
@@ -23,6 +24,7 @@ import {
   authRateLimitResponse,
   consumeAuthRateLimit,
   getAuthClientAddress,
+  resetAuthRateLimit,
 } from "../src/lib/auth-rate-limit.js";
 
 function rateLimitQuery(count) {
@@ -114,6 +116,60 @@ describe("MongoDB-backed authentication rate limits", () => {
     expect(getAuthClientAddress(forwardedRequest)).toBe("203.0.113.5");
     expect(getAuthClientAddress(invalidRequest)).toBe("unknown");
     expect(getAuthClientAddress(realIpOnlyRequest)).toBe("unknown");
+  });
+
+  it("handles missing IP headers and falls back to server IP or unknown", () => {
+    const missingHeadersRequest = new Request("http://localhost");
+    expect(getAuthClientAddress(missingHeadersRequest)).toBe("unknown");
+
+    const serverIpRequest = Object.assign(new Request("http://localhost"), {
+      ip: "127.0.0.1",
+    });
+    expect(getAuthClientAddress(serverIpRequest)).toBe("127.0.0.1");
+
+    const ipv6ServerRequest = Object.assign(new Request("http://localhost"), {
+      ip: "::1",
+    });
+    expect(getAuthClientAddress(ipv6ServerRequest)).toBe("::1");
+  });
+
+  it("resets rate limit by deleting the bucket document", async () => {
+    AuthRateLimit.deleteOne.mockResolvedValue({ deletedCount: 1 });
+    const policy = { scope: "login-account", limit: 10, windowMs: 900_000 };
+
+    await resetAuthRateLimit(policy, "email:student@example.test", 100_000);
+
+    expect(AuthRateLimit.deleteOne).toHaveBeenCalledOnce();
+    const deletedId = AuthRateLimit.deleteOne.mock.calls[0][0]._id;
+    expect(deletedId.startsWith("login-account:")).toBe(true);
+    expect(deletedId.endsWith(":0")).toBe(true);
+  });
+
+  it("allows requests in the next bucket window after previous bucket expiry", async () => {
+    AuthRateLimit.findOneAndUpdate
+      .mockReturnValueOnce(rateLimitQuery(3)) // window 1 exceeded (limit 2)
+      .mockReturnValueOnce(rateLimitQuery(1)); // window 2 new count
+    const policy = { scope: "login", limit: 2, windowMs: 60_000 };
+
+    const blockedInFirstWindow = await consumeAuthRateLimit(
+      policy,
+      "email:student@example.test",
+      60_000,
+    );
+    const allowedInNextWindow = await consumeAuthRateLimit(
+      policy,
+      "email:student@example.test",
+      120_000,
+    );
+
+    expect(blockedInFirstWindow.allowed).toBe(false);
+    expect(allowedInNextWindow.allowed).toBe(true);
+
+    const firstBucketId = AuthRateLimit.findOneAndUpdate.mock.calls[0][0]._id;
+    const secondBucketId = AuthRateLimit.findOneAndUpdate.mock.calls[1][0]._id;
+    expect(firstBucketId).not.toBe(secondBucketId);
+    expect(firstBucketId.endsWith(":1")).toBe(true);
+    expect(secondBucketId.endsWith(":2")).toBe(true);
   });
 
   it("retries a concurrent first-write collision", async () => {

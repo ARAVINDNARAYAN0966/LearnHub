@@ -10,6 +10,26 @@ const categoryAliases = {
   Business: "Data Science",
 };
 
+function matchesCategory(courseCategory, selectedCategory) {
+  if (!selectedCategory) return true;
+  if (!courseCategory) return false;
+  if (courseCategory.toLowerCase() === selectedCategory.toLowerCase()) return true;
+
+  const mappedCourseCategory = categoryAliases[courseCategory] || courseCategory;
+  if (mappedCourseCategory.toLowerCase() === selectedCategory.toLowerCase()) return true;
+
+  for (const [key, value] of Object.entries(categoryAliases)) {
+    if (
+      value.toLowerCase() === selectedCategory.toLowerCase() &&
+      key.toLowerCase() === courseCategory.toLowerCase()
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export default function CourseCatalog({ courses, initialCategory = "", initialSearch = "" }) {
   const [search, setSearch] = useState(initialSearch);
   const [category, setCategory] = useState(
@@ -20,7 +40,7 @@ export default function CourseCatalog({ courses, initialCategory = "", initialSe
   const filteredCourses = useMemo(() => {
     const query = search.trim().toLowerCase();
     return courses
-      .filter((course) => category === "" || course.category === category)
+      .filter((course) => matchesCategory(course.category, category))
       .filter((course) =>
         !query ||
         `${course.title} ${course.instructor} ${course.category} ${course.description} ${course.level}`
@@ -44,13 +64,18 @@ export default function CourseCatalog({ courses, initialCategory = "", initialSe
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search courses, skills, or instructors..."
+            placeholder="Search courses or skills..."
             aria-label="Search courses"
           />
         </label>
-        <label className="select-wrap">
+        <label className="select-wrap" htmlFor="catalog-sort-select">
           <span className="sr-only">Sort courses</span>
-          <select value={sort} onChange={(event) => setSort(event.target.value)}>
+          <select
+            id="catalog-sort-select"
+            aria-label="Sort courses by"
+            value={sort}
+            onChange={(event) => setSort(event.target.value)}
+          >
             <option value="popular">Most popular</option>
             <option value="rating">Highest rated</option>
             <option value="price-low">Price: low to high</option>

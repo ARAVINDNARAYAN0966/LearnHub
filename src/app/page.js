@@ -1,5 +1,6 @@
 import Link from "next/link";
 import CourseCard from "../components/CourseCard";
+import HomeSearch from "../components/HomeSearch";
 import { categories, courses } from "../lib/courses";
 
 const testimonials = [
@@ -53,7 +54,7 @@ export default function Home() {
             <div className="hero-art-backdrop" />
             <div className="hero-photo" role="img" aria-label="Designer sketching a product idea" />
             <div className="hero-note hero-note-top"><span>✳</span> Learn by making</div>
-            <div className="hero-feature-card">
+            <Link href="/courses" className="hero-feature-card block text-inherit no-underline">
               <span className="feature-label">THIS WEEK’S PICK</span>
               <div className="feature-card-main">
                 <div className="feature-icon">✳</div>
@@ -62,7 +63,7 @@ export default function Home() {
               </div>
               <div className="feature-progress"><span /></div>
               <div className="feature-foot"><span>Made for curious minds</span><span>01 / 06</span></div>
-            </div>
+            </Link>
             <div className="hero-note hero-note-side"><span>✦</span> Keep growing</div>
           </div>
         </div>
@@ -82,11 +83,7 @@ export default function Home() {
             </div>
             <Link className="text-link" href="/courses">All courses <span aria-hidden="true">↗</span></Link>
           </div>
-          <form className="home-search" action="/courses">
-            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.7" cy="8.7" r="5.9" /><path d="m13.2 13.2 4 4" /></svg>
-            <input type="search" name="search" placeholder="What would you love to learn?" aria-label="Search courses" />
-            <button type="submit">Find a course <span aria-hidden="true">↗</span></button>
-          </form>
+          <HomeSearch />
           <div className="course-grid course-grid-featured">
             {courses.slice(0, 3).map((course) => <CourseCard key={course.slug} course={course} />)}
           </div>

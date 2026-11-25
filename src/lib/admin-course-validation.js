@@ -7,6 +7,7 @@ const COURSE_FIELDS = [
   "price",
   "image",
   "published",
+  "level",
 ];
 
 export class AdminCourseInputError extends Error {
@@ -126,6 +127,21 @@ export function validateAdminCourseInput(body) {
     );
   }
 
+  let level = undefined;
+  if (body.level !== undefined && body.level !== null) {
+    if (typeof body.level !== "string") {
+      throw new AdminCourseInputError("level", "Skill level must be text.");
+    }
+    const trimmed = body.level.trim();
+    if (trimmed.length > 50) {
+      throw new AdminCourseInputError(
+        "level",
+        "Skill level must be 50 characters or fewer.",
+      );
+    }
+    level = trimmed || "All Levels";
+  }
+
   return {
     title,
     slug,
@@ -136,6 +152,7 @@ export function validateAdminCourseInput(body) {
     currency: "INR",
     image,
     published: body.published,
+    ...(level !== undefined ? { level } : {}),
   };
 }
 
@@ -157,19 +174,20 @@ export function validateAdminCoursePublication(body) {
   return { published: body.published };
 }
 
-export function createCourseDocument(input) {
+export function createCourseDocument(input, extraFields = {}) {
   return {
     ...input,
-    instructorRole: "Instructor",
-    originalPrice: input.price,
+    instructorRole: input.instructorRole || "Instructor",
+    originalPrice: input.originalPrice ?? input.price,
     duration: "0h",
     lessons: 0,
     rating: 0,
     reviews: 0,
     students: "0",
-    level: "Not specified",
-    color: "lavender",
-    learn: [],
-    modules: [],
+    level: input.level || extraFields.level || "Not specified",
+    color: input.color || "lavender",
+    learn: input.learn || [],
+    modules: input.modules || [],
+    ...extraFields,
   };
 }

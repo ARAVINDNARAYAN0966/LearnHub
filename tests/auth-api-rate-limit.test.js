@@ -7,6 +7,7 @@ const {
   issueSession,
   connectToDatabase,
   consumeAuthRateLimit,
+  resetAuthRateLimit,
   authRateLimitResponse,
   logAuthFailure,
 } = vi.hoisted(() => ({
@@ -20,6 +21,7 @@ const {
   issueSession: vi.fn(),
   connectToDatabase: vi.fn(),
   consumeAuthRateLimit: vi.fn(),
+  resetAuthRateLimit: vi.fn(),
   authRateLimitResponse: vi.fn(),
   logAuthFailure: vi.fn(),
 }));
@@ -39,6 +41,7 @@ vi.mock("../src/lib/auth-rate-limit.js", () => ({
   },
   authRateLimitResponse,
   consumeAuthRateLimit,
+  resetAuthRateLimit,
   getAuthClientAddress: vi.fn(() => "203.0.113.5"),
 }));
 vi.mock("../src/lib/auth-http.js", () => ({
@@ -100,6 +103,7 @@ beforeEach(() => {
     allowed: true,
     retryAfterSeconds: 60,
   });
+  resetAuthRateLimit.mockResolvedValue(undefined);
   authRateLimitResponse.mockImplementation((result) =>
     Response.json(
       { error: "Too many authentication attempts. Please try again later." },
@@ -187,5 +191,84 @@ describe("authentication rate-limit endpoints", () => {
       await existingAccountResponse.json(),
     );
     expect(issueSession).not.toHaveBeenCalled();
+  });
+
+  it("resets the login-account counter on successful authentication", async () => {
+    bcrypt.compare.mockResolvedValue(true);
+    User.findOne.mockReturnValue({
+      select: vi.fn().mockResolvedValue({
+        _id: "user-123",
+        name: "Student",
+        email: "student@example.test",
+        passwordHash: "stored-hash",
+        role: "student",
+      }),
+    });
+
+    const response = await login(
+      jsonRequest("/api/auth/login", {
+        email: "Student@Example.Test",
+        password: "correct-password",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(issueSession).toHaveBeenCalledWith("user-123", false);
+    expect(resetAuthRateLimit).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "login-account" }),
+      "email:student@example.test",
+    );
+  });
+
+  it("does not reset the rate limit counter on failed login credentials", async () => {
+    bcrypt.compare.mockResolvedValue(false);
+    User.findOne.mockReturnValue({
+      select: vi.fn().mockResolvedValue({
+        _id: "user-123",
+        name: "Student",
+        email: "student@example.test",
+        passwordHash: "stored-hash",
+        role: "student",
+      }),
+    });
+
+    const response = await login(
+      jsonRequest("/api/auth/login", {
+        email: "student@example.test",
+        password: "wrong-password",
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(issueSession).not.toHaveBeenCalled();
+    expect(resetAuthRateLimit).not.toHaveBeenCalled();
+  });
+
+  it("still completes successful login even if rate limit reset fails", async () => {
+    bcrypt.compare.mockResolvedValue(true);
+    User.findOne.mockReturnValue({
+      select: vi.fn().mockResolvedValue({
+        _id: "user-123",
+        name: "Student",
+        email: "student@example.test",
+        passwordHash: "stored-hash",
+        role: "student",
+      }),
+    });
+    resetAuthRateLimit.mockRejectedValue(new Error("Mongo network glitch"));
+
+    const response = await login(
+      jsonRequest("/api/auth/login", {
+        email: "student@example.test",
+        password: "correct-password",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(issueSession).toHaveBeenCalledWith("user-123", false);
+    expect(logAuthFailure).toHaveBeenCalledWith(
+      "Login rate limit reset",
+      expect.any(Error),
+    );
   });
 });

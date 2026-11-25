@@ -20,6 +20,7 @@ export default function Footer() {
             <Link href="/courses">All courses</Link>
             <Link href="/courses#categories">Categories</Link>
             <Link href="/dashboard">My learning</Link>
+            <Link href="/certificates/verify">Verify certificate</Link>
           </div>
           <div className="footer-column">
             <h3>LearnHub</h3>

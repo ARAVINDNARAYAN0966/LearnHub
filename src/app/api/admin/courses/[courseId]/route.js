@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Course from "../../../../../models/Course";
 import { authJson } from "../../../../../lib/auth-http";
+import { verifyCsrfOrigin } from "../../../../../lib/csrf";
 import {
   adminCourseFailure,
   authorizeAdminApi,
@@ -196,7 +197,10 @@ export async function PATCH(request, { params }) {
   }
 }
 
-export async function DELETE(_request, { params }) {
+export async function DELETE(request, { params }) {
+  const csrf = verifyCsrfOrigin(request);
+  if (!csrf.ok) return csrf.response;
+
   const authorization = await authorizeAdminApi("Admin course deletion");
   if (authorization.response) return authorization.response;
 

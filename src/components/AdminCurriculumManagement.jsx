@@ -55,7 +55,10 @@ function getNextModuleNumber(modules) {
   return String(next).padStart(2, "0");
 }
 
-export default function AdminCurriculumManagement({ courseId }) {
+export default function AdminCurriculumManagement({
+  courseId,
+  backHref = "/admin/courses",
+}) {
   const [course, setCourse] = useState(null);
   const [version, setVersion] = useState(null);
   const [modules, setModules] = useState([]);
@@ -264,29 +267,23 @@ export default function AdminCurriculumManagement({ courseId }) {
               number: module.number,
               title: module.title,
               description: module.description,
-              lessons: module.lessons.map(
-                ({
-                  id,
-                  title,
-                  description,
-                  type,
-                  content,
-                  videoUrl,
-                  durationMinutes,
-                  order,
-                  published,
-                }) => ({
-                  ...(id ? { id } : {}),
-                  title,
-                  description,
-                  type,
-                  content,
-                  videoUrl,
-                  durationMinutes,
-                  order,
-                  published,
-                }),
-              ),
+              lessons: module.lessons.map((lesson) => ({
+                ...(lesson.id ? { id: lesson.id } : {}),
+                title: lesson.title,
+                description: lesson.description,
+                type: lesson.type,
+                content: lesson.content,
+                videoUrl: lesson.videoUrl,
+                durationMinutes:
+                  Number.isInteger(lesson.durationMinutes)
+                    ? lesson.durationMinutes
+                    : Number.parseInt(lesson.durationMinutes, 10) || 0,
+                order:
+                  Number.isInteger(lesson.order)
+                    ? lesson.order
+                    : Number.parseInt(lesson.order, 10) || 0,
+                published: lesson.published,
+              })),
             })),
           }),
         },
@@ -348,7 +345,7 @@ export default function AdminCurriculumManagement({ courseId }) {
           <h2>{course?.title}</h2>
           <p>Draft lessons stay hidden until published. Existing lesson IDs and progress are preserved when reordering.</p>
         </div>
-        <Link className="button button-outline" href="/admin/courses">
+        <Link className="button button-outline" href={backHref}>
           Back to courses
         </Link>
       </div>
@@ -637,7 +634,7 @@ export default function AdminCurriculumManagement({ courseId }) {
                                   updateLesson(
                                     module.number,
                                     lesson.id || lesson.clientId,
-                                    { durationMinutes: event.target.value },
+                                    { durationMinutes: Number(event.target.value) },
                                   )
                                 }
                                 required

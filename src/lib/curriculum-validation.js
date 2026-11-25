@@ -119,8 +119,15 @@ export function validateCurriculumAppend(body, existingModule = null) {
 
     const content = optionalText(lesson.content, "Lesson content", 100000);
     const videoUrl = validateVideoUrl(lesson.videoUrl);
-    const durationMinutes = lesson.durationMinutes;
-    const order = lesson.order;
+    const durationMinutes =
+      typeof lesson.durationMinutes === "string" &&
+      /^\d+$/.test(lesson.durationMinutes.trim())
+        ? Number.parseInt(lesson.durationMinutes.trim(), 10)
+        : lesson.durationMinutes;
+    const order =
+      typeof lesson.order === "string" && /^\d+$/.test(lesson.order.trim())
+        ? Number.parseInt(lesson.order.trim(), 10)
+        : lesson.order;
     const published = lesson.published === undefined ? false : lesson.published;
 
     if (
@@ -281,8 +288,15 @@ export function validateCurriculumUpdate(body, existingModules = []) {
       }
       const content = optionalText(lesson.content, "Lesson content", 100000);
       const videoUrl = validateVideoUrl(lesson.videoUrl);
-      const durationMinutes = lesson.durationMinutes;
-      const order = lesson.order;
+      const durationMinutes =
+        typeof lesson.durationMinutes === "string" &&
+        /^\d+$/.test(lesson.durationMinutes.trim())
+          ? Number.parseInt(lesson.durationMinutes.trim(), 10)
+          : lesson.durationMinutes;
+      const order =
+        typeof lesson.order === "string" && /^\d+$/.test(lesson.order.trim())
+          ? Number.parseInt(lesson.order.trim(), 10)
+          : lesson.order;
       const published = lesson.published;
 
       if (

@@ -2,9 +2,10 @@ import mongoose from "mongoose";
 import { getCurrentUser } from "../../../../../lib/auth";
 import { authJson, logAuthFailure } from "../../../../../lib/auth-http";
 import { getCourseCurriculumForUser } from "../../../../../lib/curriculum-data";
+import { isDatabaseConnectionError } from "../../../../../lib/mongodb";
 
 function databaseFailureStatus(error) {
-  return error?.name === "MongooseServerSelectionError" ? 503 : 500;
+  return isDatabaseConnectionError(error) ? 503 : 500;
 }
 
 export async function GET(_request, { params }) {

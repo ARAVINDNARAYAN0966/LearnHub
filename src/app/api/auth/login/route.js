@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import User from "../../../../models/User";
 import { assertSessionConfiguration, issueSession } from "../../../../lib/auth";
+import { verifyCsrfOrigin } from "../../../../lib/csrf";
 import {
   authJson,
   logAuthFailure,
@@ -11,14 +12,21 @@ import {
   authRateLimitResponse,
   consumeAuthRateLimit,
   getAuthClientAddress,
+  resetAuthRateLimit,
 } from "../../../../lib/auth-rate-limit";
-import { connectToDatabase } from "../../../../lib/mongodb";
+import {
+  connectToDatabase,
+  isDatabaseConnectionError,
+} from "../../../../lib/mongodb";
 
 const BCRYPT_WORK_FACTOR = 12;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVALID_CREDENTIALS = { error: "Invalid email or password." };
 
 export async function POST(request) {
+  const csrf = verifyCsrfOrigin(request);
+  if (!csrf.ok) return csrf.response;
+
   try {
     assertSessionConfiguration();
     const ipLimit = await consumeAuthRateLimit(
@@ -30,7 +38,7 @@ export async function POST(request) {
     logAuthFailure("Login rate limiting", error);
     return authJson(
       { error: "Unable to sign in right now." },
-      error?.name === "MongooseServerSelectionError" ? 503 : 500,
+      isDatabaseConnectionError(error) ? 503 : 500,
     );
   }
 
@@ -53,7 +61,7 @@ export async function POST(request) {
       logAuthFailure("Login account rate limiting", error);
       return authJson(
         { error: "Unable to sign in right now." },
-        error?.name === "MongooseServerSelectionError" ? 503 : 500,
+        isDatabaseConnectionError(error) ? 503 : 500,
       );
     }
   }
@@ -82,6 +90,15 @@ export async function POST(request) {
     }
 
     await issueSession(user._id.toString(), body.rememberMe === true);
+
+    try {
+      await resetAuthRateLimit(
+        AUTH_RATE_LIMITS.loginAccount,
+        `email:${email}`,
+      );
+    } catch (resetError) {
+      logAuthFailure("Login rate limit reset", resetError);
+    }
 
     return authJson({
       user: {

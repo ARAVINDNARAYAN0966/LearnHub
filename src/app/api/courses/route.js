@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPublishedCourses } from "../../../lib/course-data";
+import { isDatabaseConnectionError } from "../../../lib/mongodb";
 
 export async function GET() {
   try {
@@ -14,10 +15,12 @@ export async function GET() {
       error instanceof Error ? error.name : "UnknownError";
     console.error(`Published course lookup failed (${errorName})`);
 
+    const status = isDatabaseConnectionError(error) ? 503 : 500;
+
     return NextResponse.json(
       { error: "Unable to load courses right now." },
       {
-        status: error?.name === "MongooseServerSelectionError" ? 503 : 500,
+        status,
         headers: { "Cache-Control": "no-store" },
       },
     );

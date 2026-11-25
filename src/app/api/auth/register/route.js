@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import User from "../../../../models/User";
 import { assertSessionConfiguration } from "../../../../lib/auth";
+import { verifyCsrfOrigin } from "../../../../lib/csrf";
 import {
   authJson,
   logAuthFailure,
@@ -12,7 +13,10 @@ import {
   consumeAuthRateLimit,
   getAuthClientAddress,
 } from "../../../../lib/auth-rate-limit";
-import { connectToDatabase } from "../../../../lib/mongodb";
+import {
+  connectToDatabase,
+  isDatabaseConnectionError,
+} from "../../../../lib/mongodb";
 
 const BCRYPT_WORK_FACTOR = 12;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -38,6 +42,9 @@ function registrationAcceptedResponse() {
 }
 
 export async function POST(request) {
+  const csrf = verifyCsrfOrigin(request);
+  if (!csrf.ok) return csrf.response;
+
   try {
     assertSessionConfiguration();
     const ipLimit = await consumeAuthRateLimit(
@@ -49,7 +56,7 @@ export async function POST(request) {
     logAuthFailure("Registration rate limiting", error);
     return authJson(
       { error: "Unable to create your account right now." },
-      error?.name === "MongooseServerSelectionError" ? 503 : 500,
+      isDatabaseConnectionError(error) ? 503 : 500,
     );
   }
 
@@ -118,7 +125,7 @@ export async function POST(request) {
     }
 
     logAuthFailure("Registration", error);
-    if (error?.name === "MongooseServerSelectionError") {
+    if (isDatabaseConnectionError(error)) {
       return authJson(
         {
           error: "Registration is temporarily unavailable. Please try again shortly.",

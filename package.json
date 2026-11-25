@@ -2,12 +2,15 @@
   "name": "learnhub",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run",
+    "test": "vitest run --testTimeout=15000",
     "seed:courses": "node --env-file=.env.local scripts/seed-courses.mjs"
   },
   "dependencies": {

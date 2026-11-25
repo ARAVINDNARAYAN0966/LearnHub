@@ -3,6 +3,7 @@ import Course from "../../../../models/Course";
 import Enrollment from "../../../../models/Enrollment";
 import { getCurrentUser } from "../../../../lib/auth";
 import { authJson, logAuthFailure } from "../../../../lib/auth-http";
+import { verifyCsrfOrigin } from "../../../../lib/csrf";
 import {
   getProgressSummary,
   getPublishedLessons,
@@ -10,10 +11,13 @@ import {
   recordLessonAccess,
   updateEnrollmentProgress,
 } from "../../../../lib/lesson-progress";
-import { connectToDatabase } from "../../../../lib/mongodb";
+import {
+  connectToDatabase,
+  isDatabaseConnectionError,
+} from "../../../../lib/mongodb";
 
 function databaseFailureStatus(error) {
-  return error?.name === "MongooseServerSelectionError" ? 503 : 500;
+  return isDatabaseConnectionError(error) ? 503 : 500;
 }
 
 async function getAuthenticatedUser() {
@@ -82,6 +86,9 @@ export async function GET(request, { params }) {
 }
 
 export async function POST(request, { params }) {
+  const csrf = verifyCsrfOrigin(request);
+  if (!csrf.ok) return csrf.response;
+
   const auth = await getAuthenticatedUser();
   if (auth.response) return auth.response;
   if (!auth.user) {

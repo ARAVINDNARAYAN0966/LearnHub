@@ -33,6 +33,10 @@ const userSchema = new mongoose.Schema(
       default: "student",
       required: true,
     },
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true },
 );

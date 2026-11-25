@@ -1,15 +1,18 @@
 import mongoose from "mongoose";
+import Course from "../../../models/Course";
 import Enrollment from "../../../models/Enrollment";
 import { getCurrentUser } from "../../../lib/auth";
 import { authJson, logAuthFailure } from "../../../lib/auth-http";
+import { verifyCsrfOrigin } from "../../../lib/csrf";
 import {
   CourseEnrollmentUnavailableError,
   createCourseEnrollment,
 } from "../../../lib/course-write-coordination";
 import { getUserEnrollments } from "../../../lib/enrollment-data";
+import { connectToDatabase, isDatabaseConnectionError } from "../../../lib/mongodb";
 
 function databaseFailureStatus(error) {
-  return error?.name === "MongooseServerSelectionError" ? 503 : 500;
+  return isDatabaseConnectionError(error) ? 503 : 500;
 }
 
 export async function GET() {
@@ -41,6 +44,9 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  const csrf = verifyCsrfOrigin(request);
+  if (!csrf.ok) return csrf.response;
+
   let user;
   try {
     user = await getCurrentUser();
@@ -73,6 +79,23 @@ export async function POST(request) {
   }
 
   try {
+    await connectToDatabase();
+    const course = await Course.findById(courseId).select("price published deleting").lean();
+    if (!course || !course.published || course.deleting) {
+      return authJson({ error: "Course not found or unavailable." }, 404);
+    }
+
+    if (course.price > 0) {
+      return authJson(
+        {
+          error: "Paid course enrollment is currently unavailable as no payment gateway is configured.",
+          paymentUnavailable: true,
+          price: course.price,
+        },
+        402,
+      );
+    }
+
     const enrollment = await createCourseEnrollment(user.id, courseId);
 
     return authJson(

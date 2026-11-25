@@ -3,24 +3,32 @@ import Course from "../../../../../../models/Course";
 import LessonProgress from "../../../../../../models/LessonProgress";
 import { getCurrentUser } from "../../../../../../lib/auth";
 import { authJson, logAuthFailure } from "../../../../../../lib/auth-http";
+import { verifyCsrfOrigin } from "../../../../../../lib/csrf";
 import {
   adminCourseFailure,
   authorizeAdminApi,
+  authorizeInstructorApi,
 } from "../../../../../../lib/admin-course-api";
-import { getCurriculumManagementAccess } from "../../../../../../lib/curriculum-policy";
+import {
+  canManageCourse,
+  getCurriculumManagementAccess,
+} from "../../../../../../lib/curriculum-policy";
 import {
   CurriculumInputError,
   validateCurriculumAppend,
   validateCurriculumUpdate,
 } from "../../../../../../lib/curriculum-validation";
-import { connectToDatabase } from "../../../../../../lib/mongodb";
+import {
+  connectToDatabase,
+  isDatabaseConnectionError,
+} from "../../../../../../lib/mongodb";
 import { getCourseVersionFilter } from "../../../../../../lib/course-version";
 
 const MAX_BODY_BYTES = 256000;
 const MAX_UPDATE_BODY_BYTES = 8 * 1024 * 1024;
 
 function databaseFailureStatus(error) {
-  return error?.name === "MongooseServerSelectionError" ? 503 : 500;
+  return isDatabaseConnectionError(error) ? 503 : 500;
 }
 
 function validCourseId(courseId) {
@@ -102,7 +110,7 @@ function serializeCurriculum(course) {
 }
 
 export async function GET(_request, { params }) {
-  const authorization = await authorizeAdminApi("Admin curriculum lookup");
+  const authorization = await authorizeInstructorApi("Curriculum lookup");
   if (authorization.response) return authorization.response;
 
   const courseId = await getCourseId(params);
@@ -113,34 +121,31 @@ export async function GET(_request, { params }) {
   try {
     await connectToDatabase();
     const course = await Course.findById(courseId)
-      .select("_id title slug modules __v")
+      .select("_id title slug modules instructorId __v")
       .lean();
     if (!course) {
       return authJson({ error: "Course not found." }, 404);
     }
 
+    if (!canManageCourse(authorization.user, course)) {
+      return authJson(
+        { error: "You are not authorized to view or edit this course curriculum." },
+        403,
+      );
+    }
+
     return authJson({ curriculum: serializeCurriculum(course) });
   } catch (error) {
-    return adminCourseFailure("Admin curriculum lookup", error);
+    return adminCourseFailure("Curriculum lookup", error);
   }
 }
 
 export async function POST(request, { params }) {
-  let user;
-  try {
-    user = await getCurrentUser();
-  } catch (error) {
-    logAuthFailure("Curriculum management authentication", error);
-    return authJson(
-      { error: "Unable to verify your session." },
-      databaseFailureStatus(error),
-    );
-  }
+  const csrf = verifyCsrfOrigin(request);
+  if (!csrf.ok) return csrf.response;
 
-  const access = getCurriculumManagementAccess(user);
-  if (!access.allowed) {
-    return authJson({ error: access.error }, access.status);
-  }
+  const authorization = await authorizeInstructorApi("Curriculum append");
+  if (authorization.response) return authorization.response;
 
   const courseId = await getCourseId(params);
   if (!courseId) {
@@ -165,9 +170,16 @@ export async function POST(request, { params }) {
 
   try {
     await connectToDatabase();
-    const course = await Course.findById(courseId).select("modules __v");
+    const course = await Course.findById(courseId).select("modules instructorId __v");
     if (!course) {
       return authJson({ error: "Course not found." }, 404);
+    }
+
+    if (!canManageCourse(authorization.user, course)) {
+      return authJson(
+        { error: "You are not authorized to modify this course curriculum." },
+        403,
+      );
     }
     const version = course.__v ?? 0;
 
@@ -269,7 +281,10 @@ export async function POST(request, { params }) {
 }
 
 export async function PUT(request, { params }) {
-  const authorization = await authorizeAdminApi("Admin curriculum update");
+  const csrf = verifyCsrfOrigin(request);
+  if (!csrf.ok) return csrf.response;
+
+  const authorization = await authorizeInstructorApi("Curriculum update");
   if (authorization.response) return authorization.response;
 
   const courseId = await getCourseId(params);
@@ -283,10 +298,17 @@ export async function PUT(request, { params }) {
   try {
     await connectToDatabase();
     const course = await Course.findById(courseId)
-      .select("_id title slug modules __v")
+      .select("_id title slug modules instructorId __v")
       .lean();
     if (!course) {
       return authJson({ error: "Course not found." }, 404);
+    }
+
+    if (!canManageCourse(authorization.user, course)) {
+      return authJson(
+        { error: "You are not authorized to modify this course curriculum." },
+        403,
+      );
     }
 
     let update;

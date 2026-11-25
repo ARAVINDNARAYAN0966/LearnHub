@@ -28,6 +28,7 @@ export default function LogoutButton({
       }
 
       window.dispatchEvent(new Event("learnhub:auth-changed"));
+      router.refresh();
       router.replace("/login");
     } catch {
       setError("Unable to sign out. Please try again.");

@@ -2,12 +2,17 @@ import "server-only";
 
 import { getCurrentUser } from "./auth";
 import { authJson, logAuthFailure } from "./auth-http";
-import { getCurriculumManagementAccess } from "./curriculum-policy";
+import { verifyCsrfOrigin } from "./csrf";
+import {
+  getCurriculumManagementAccess,
+  getInstructorManagementAccess,
+} from "./curriculum-policy";
+import { isDatabaseConnectionError } from "./mongodb";
 
 const MAX_BODY_BYTES = 32768;
 
 function databaseFailureStatus(error) {
-  return error?.name === "MongooseServerSelectionError" ? 503 : 500;
+  return isDatabaseConnectionError(error) ? 503 : 500;
 }
 
 export async function authorizeAdminApi(operation) {
@@ -34,7 +39,36 @@ export async function authorizeAdminApi(operation) {
   return { user, response: null };
 }
 
+export async function authorizeInstructorApi(operation) {
+  let user;
+  try {
+    user = await getCurrentUser();
+  } catch (error) {
+    logAuthFailure(`${operation} authentication`, error);
+    return {
+      response: authJson(
+        { error: "Unable to verify your session." },
+        databaseFailureStatus(error),
+      ),
+    };
+  }
+
+  const access = getInstructorManagementAccess(user);
+  if (!access.allowed) {
+    return {
+      response: authJson({ error: access.error }, access.status),
+    };
+  }
+
+  return { user, response: null };
+}
+
 export async function parseAdminJsonBody(request) {
+  const csrf = verifyCsrfOrigin(request);
+  if (!csrf.ok) {
+    return { response: csrf.response };
+  }
+
   const contentLength = Number(request.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
     return {

@@ -3,7 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import LessonCompletionAction from "../../../../components/LessonCompletionAction";
+import LessonCurriculumSidebar from "../../../../components/LessonCurriculumSidebar";
+import ClaimCertificateButton from "../../../../components/ClaimCertificateButton";
 import { getCurrentUser } from "../../../../lib/auth";
+import { canManageCourse } from "../../../../lib/curriculum-policy";
 import {
   getProgressSummary,
   getPublishedLessons,
@@ -16,6 +19,35 @@ import Enrollment from "../../../../models/Enrollment";
 
 export async function generateMetadata() {
   return { title: "Learning | LearnHub" };
+}
+
+function renderVideoPlayer(videoUrl) {
+  if (!videoUrl) return null;
+  const ytMatch = videoUrl.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/,
+  );
+  if (ytMatch) {
+    return (
+      <iframe
+        className="lesson-video"
+        src={`https://www.youtube.com/embed/${ytMatch[1]}`}
+        title="Lesson video"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+      />
+    );
+  }
+  return (
+    <video
+      className="lesson-video"
+      controls
+      playsInline
+      preload="metadata"
+      src={videoUrl}
+    >
+      Your browser does not support embedded video.
+    </video>
+  );
 }
 
 export default function LessonPage({ params }) {
@@ -56,7 +88,9 @@ async function LessonDetails({ params }) {
   })
     .select("_id")
     .lean();
-  if (!enrollment) {
+
+  const isPrivileged = user.role === "admin" || canManageCourse(user, course);
+  if (!enrollment && !isPrivileged) {
     redirect(`/courses/${courseSlug}#curriculum`);
   }
 
@@ -80,91 +114,134 @@ async function LessonDetails({ params }) {
   const previousLesson = lessons[lessonIndex - 1] ?? null;
   const nextLesson = lessons[lessonIndex + 1] ?? null;
 
+  const completedLessonMap = new Map(
+    (progress?.lessons || []).map((item) => [item.id, item.completed]),
+  );
+
+  const structuredModules = (course.modules || [])
+    .map((module, moduleIdx) => {
+      const moduleNumber =
+        module.number || String(moduleIdx + 1).padStart(2, "0");
+      const moduleLessons = lessons
+        .filter((item) => item.moduleNumber === moduleNumber)
+        .map((item) => ({
+          ...item,
+          completed: completedLessonMap.get(item.id) || false,
+        }));
+      return {
+        number: moduleNumber,
+        title: module.title,
+        description: module.description || module.summary || "",
+        lessons: moduleLessons,
+      };
+    })
+    .filter((module) => module.lessons.length > 0);
+
   return (
     <main className="lesson-page">
-      <div className="page-container">
-        <nav className="breadcrumbs lesson-breadcrumbs" aria-label="Breadcrumb">
-          <Link href="/dashboard">My learning</Link>
-          <span>/</span>
-          <Link href={`/courses/${courseSlug}`}>{course.title}</Link>
-          <span>/</span>
-          <span>{lesson.moduleTitle}</span>
-        </nav>
-        <article className="lesson-content-panel">
-          <header className="lesson-header">
-            <span className="eyebrow">
-              MODULE {lesson.moduleNumber} · {lesson.type.toUpperCase()}
-            </span>
-            <h1>{lesson.title}</h1>
-            {lesson.description && <p>{lesson.description}</p>}
-            {lesson.moduleDescription && (
-              <p className="lesson-module-description">
-                {lesson.moduleDescription}
-              </p>
-            )}
-            <div className="lesson-meta">
-              <span>{lesson.moduleTitle}</span>
-              {lesson.durationMinutes > 0 && (
-                <span>{lesson.durationMinutes} min</span>
-              )}
-            </div>
-          </header>
-          {lesson.type === "video" && lesson.videoUrl ? (
-            <video
-              className="lesson-video"
-              controls
-              playsInline
-              preload="metadata"
-              src={lesson.videoUrl}
-            >
-              Your browser does not support embedded video.
-            </video>
-          ) : lesson.content ? (
-            <div className="lesson-material">{lesson.content}</div>
-          ) : (
-            <p className="lesson-material-empty">
-              Lesson material has not been added yet.
-            </p>
-          )}
-          <LessonCompletionAction
-            courseId={course._id.toString()}
-            lessonId={lesson.id}
-            initiallyCompleted={Boolean(lessonProgress?.completed)}
-          />
-          <nav className="lesson-navigation" aria-label="Lesson navigation">
-            {previousLesson ? (
-              <Link
-                href={`/learn/${courseSlug}/${previousLesson.id}`}
-                className="lesson-navigation-link"
-              >
-                <span>Previous lesson</span>
-                <strong>{previousLesson.title}</strong>
-              </Link>
-            ) : (
-              <Link
-                href={`/courses/${courseSlug}#curriculum`}
-                className="lesson-navigation-link"
-              >
-                <span>Course curriculum</span>
-                <strong>Back to course</strong>
-              </Link>
-            )}
-            {nextLesson ? (
-              <Link
-                href={`/learn/${courseSlug}/${nextLesson.id}`}
-                className="lesson-navigation-link lesson-navigation-next"
-              >
-                <span>Next lesson</span>
-                <strong>{nextLesson.title}</strong>
-              </Link>
-            ) : (
-              <span className="lesson-navigation-link lesson-navigation-end">
-                <span>Course complete</span>
-                <strong>You’ve reached the last lesson</strong>
-              </span>
-            )}
+      <div className="page-container lesson-layout">
+        <div className="lesson-main">
+          <nav className="breadcrumbs lesson-breadcrumbs" aria-label="Breadcrumb">
+            <Link href="/dashboard">My learning</Link>
+            <span>/</span>
+            <Link href={`/courses/${courseSlug}`}>{course.title}</Link>
+            <span>/</span>
+            <span>{lesson.moduleTitle}</span>
           </nav>
-        </article>
+          <article className="lesson-content-panel">
+            <header className="lesson-header">
+              <span className="eyebrow">
+                MODULE {lesson.moduleNumber} · {lesson.type.toUpperCase()}
+              </span>
+              <h1>{lesson.title}</h1>
+              {lesson.description && <p>{lesson.description}</p>}
+              {lesson.moduleDescription && (
+                <p className="lesson-module-description">
+                  {lesson.moduleDescription}
+                </p>
+              )}
+              <div className="lesson-meta">
+                <span>{lesson.moduleTitle}</span>
+                {lesson.durationMinutes > 0 && (
+                  <span>{lesson.durationMinutes} min</span>
+                )}
+              </div>
+            </header>
+
+            {lesson.type === "video" && lesson.videoUrl && (
+              <div className="lesson-video-wrapper">
+                {renderVideoPlayer(lesson.videoUrl)}
+              </div>
+            )}
+
+            {lesson.content ? (
+              <div className="lesson-material">{lesson.content}</div>
+            ) : lesson.type !== "video" ? (
+              <p className="lesson-material-empty">
+                Lesson material has not been added yet.
+              </p>
+            ) : null}
+
+            <LessonCompletionAction
+              courseId={course._id.toString()}
+              lessonId={lesson.id}
+              initiallyCompleted={Boolean(lessonProgress?.completed)}
+            />
+
+            <nav className="lesson-navigation" aria-label="Lesson navigation">
+              {previousLesson ? (
+                <Link
+                  href={`/learn/${courseSlug}/${previousLesson.id}`}
+                  className="lesson-navigation-link"
+                >
+                  <span>Previous lesson</span>
+                  <strong>{previousLesson.title}</strong>
+                </Link>
+              ) : (
+                <Link
+                  href={`/courses/${courseSlug}#curriculum`}
+                  className="lesson-navigation-link"
+                >
+                  <span>Course curriculum</span>
+                  <strong>Back to course</strong>
+                </Link>
+              )}
+              {nextLesson ? (
+                <Link
+                  href={`/learn/${courseSlug}/${nextLesson.id}`}
+                  className="lesson-navigation-link lesson-navigation-next"
+                >
+                  <span>Next lesson</span>
+                  <strong>{nextLesson.title}</strong>
+                </Link>
+              ) : (
+                <div className="lesson-navigation-link lesson-navigation-end">
+                  <span>Course complete</span>
+                  <strong>You’ve reached the last lesson</strong>
+                  {progress.progressPercentage === 100 && (
+                    <div className="mt-3">
+                      <ClaimCertificateButton
+                        courseId={course._id.toString()}
+                        buttonText="Claim Certificate 🎓"
+                        className="button button-small button-primary"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </nav>
+          </article>
+        </div>
+
+        <LessonCurriculumSidebar
+          courseSlug={courseSlug}
+          courseTitle={course.title}
+          currentLessonId={lesson.id}
+          progressPercentage={progress.progressPercentage}
+          completedLessons={progress.completedLessons}
+          totalLessons={progress.totalPublishedLessons}
+          modules={structuredModules}
+        />
       </div>
     </main>
   );

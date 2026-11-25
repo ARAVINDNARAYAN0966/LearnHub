@@ -2,7 +2,8 @@ import Link from "next/link";
 import { formatPrice } from "../lib/format-price";
 
 export default function CourseCard({ course, showViewButton = false }) {
-  const hasDiscount = course.originalPrice > course.price;
+  const hasDiscount =
+    course.originalPrice > course.price && course.originalPrice > 0;
   const discountPercent = hasDiscount
     ? Math.round(((course.originalPrice - course.price) / course.originalPrice) * 100)
     : 0;

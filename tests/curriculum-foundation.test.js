@@ -7,6 +7,7 @@ import {
   CurriculumInputError,
   validateCurriculumAppend,
 } from "../src/lib/curriculum-validation.js";
+import { getCourseVersionFilter } from "../src/lib/course-version.js";
 
 const draftLesson = (overrides = {}) => ({
   title: "Authored lesson",
@@ -151,5 +152,29 @@ describe("append-only curriculum input validation", () => {
         { number: "01", lessons: [{ order: 1 }] },
       ),
     ).toThrow(/unique/);
+  });
+});
+
+describe("course version filter", () => {
+  it("builds query filter for version 0 or missing version", () => {
+    expect(getCourseVersionFilter(0)).toEqual({
+      $or: [{ __v: 0 }, { __v: { $exists: false } }],
+    });
+    expect(getCourseVersionFilter(undefined)).toEqual({
+      $or: [{ __v: 0 }, { __v: { $exists: false } }],
+    });
+  });
+
+  it("builds query filter for safe version integer", () => {
+    expect(getCourseVersionFilter(3)).toEqual({ __v: 3 });
+  });
+
+  it("safely extracts __v from course document object", () => {
+    expect(getCourseVersionFilter({ __v: 2, title: "Course" })).toEqual({
+      __v: 2,
+    });
+    expect(getCourseVersionFilter({ title: "New Course" })).toEqual({
+      $or: [{ __v: 0 }, { __v: { $exists: false } }],
+    });
   });
 });

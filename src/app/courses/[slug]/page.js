@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import CourseCard from "../../../components/CourseCard";
 import CourseEnrollmentAction from "../../../components/CourseEnrollmentAction";
+import CourseReviews from "../../../components/CourseReviews";
 import LessonProgress from "../../../models/LessonProgress";
 import { getCurrentUser } from "../../../lib/auth";
 import { getCourseCurriculumForUser } from "../../../lib/curriculum-data";
@@ -103,7 +104,13 @@ async function CourseDetails({ params }) {
               <span className="eyebrow eyebrow-light">{course.category.toUpperCase()} · {course.level.toUpperCase()}</span>
               <h1>{course.title}</h1>
               <p>{course.description}</p>
-              <div className="detail-rating"><span aria-hidden="true">★★★★★</span> <strong>{course.rating}</strong> <span>({course.reviews.toLocaleString()} ratings)</span></div>
+              <div className="detail-rating">
+                <span aria-hidden="true">★★★★★</span> <strong>{course.rating}</strong>{" "}
+                <span>
+                  ({course.reviews.toLocaleString()}{" "}
+                  {course.reviews === 1 ? "rating" : "ratings"})
+                </span>
+              </div>
               <div className="detail-instructor"><span className="instructor-avatar">{course.instructor.split(" ").map((part) => part[0]).join("")}</span><span>Created by <strong>{course.instructor}</strong><small>{course.instructorRole}</small></span></div>
             </div>
             <div className={`detail-cover course-image-${course.color}`} style={{ backgroundImage: `url("${course.image}")` }} role="img" aria-label={`Cover image for ${course.title}`}>
@@ -115,13 +122,20 @@ async function CourseDetails({ params }) {
       </section>
       <div className="page-container detail-layout">
         <div className="detail-main">
-          <section className="detail-panel learn-panel">
-            <span className="eyebrow">TAKE SOMETHING WITH YOU</span>
-            <h2>What you’ll learn</h2>
-            <div className="learn-grid">
-              {course.learn.map((item) => <div key={item}><span aria-hidden="true">✓</span><p>{item}</p></div>)}
-            </div>
-          </section>
+          {Array.isArray(course.learn) && course.learn.length > 0 && (
+            <section className="detail-panel learn-panel">
+              <span className="eyebrow">TAKE SOMETHING WITH YOU</span>
+              <h2>What you’ll learn</h2>
+              <div className="learn-grid">
+                {course.learn.map((item) => (
+                  <div key={item}>
+                    <span aria-hidden="true">✓</span>
+                    <p>{item}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
           <section className="detail-panel" id="curriculum">
             <span className="eyebrow">A CLEAR PATH, AT YOUR PACE</span>
             <h2>Course curriculum</h2>
@@ -209,16 +223,22 @@ async function CourseDetails({ params }) {
             <span className="eyebrow">MEET YOUR INSTRUCTOR</span>
             <div className="instructor-profile"><span className="instructor-avatar instructor-avatar-large">{course.instructor.split(" ").map((part) => part[0]).join("")}</span><div><h2>{course.instructor}</h2><p>{course.instructorRole}</p><p className="instructor-bio">A thoughtful practitioner who loves making complex ideas feel simple, useful, and inspiring.</p></div></div>
           </section>
+          <CourseReviews courseId={course.id} />
         </div>
         <aside className="enroll-card">
-          <span className={`enroll-image course-image-${course.color}`} style={{ backgroundImage: `url("${course.image}")` }} />
           <div className="enroll-body">
             <span className="eyebrow">YOUR NEXT STEP</span>
-            <div className="enroll-price">{formatPrice(course.price)}<del>{formatPrice(course.originalPrice)}</del></div>
+            <div className="enroll-price">
+              {formatPrice(course.price)}
+              {course.originalPrice > course.price && course.originalPrice > 0 && (
+                <del>{formatPrice(course.originalPrice)}</del>
+              )}
+            </div>
             <p className="enroll-note">Enroll to save this course to your learning space.</p>
             <CourseEnrollmentAction
               courseId={course.id}
               courseSlug={course.slug}
+              coursePrice={course.price}
               lessonId={continueLessonId}
               isAuthenticated={Boolean(user)}
               enrollmentStatus={enrollmentStatus}

@@ -1,14 +1,16 @@
 import React from "react";
 import Link from "next/link";
 
-export function AdminAccessLoading() {
+export function AdminAccessLoading({
+  message = "Verifying administrator access...",
+} = {}) {
   return (
     <main className="admin-dashboard admin-dashboard-loading min-h-screen">
       <div className="admin-loading-card" role="status" aria-live="polite">
         <span className="admin-loading-mark" aria-hidden="true">
           LH
         </span>
-        <p>Verifying administrator access...</p>
+        <p>{message}</p>
       </div>
     </main>
   );
@@ -152,6 +154,21 @@ export default function AdminDashboardView({ stats }) {
             <span>
               <strong>Curriculum management</strong>
               <small>Choose a course to edit its modules and lessons.</small>
+            </span>
+            <span className="admin-management-arrow" aria-hidden="true">
+              ↗
+            </span>
+          </Link>
+          <Link
+            className="admin-management-card"
+            href="/admin/users"
+          >
+            <span className="admin-management-icon" aria-hidden="true">
+              U
+            </span>
+            <span>
+              <strong>User management</strong>
+              <small>View users and manage instructor/admin roles.</small>
             </span>
             <span className="admin-management-arrow" aria-hidden="true">
               ↗

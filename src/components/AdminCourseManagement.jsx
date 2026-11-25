@@ -11,6 +11,7 @@ const EMPTY_FORM = {
   description: "",
   category: "",
   instructor: "",
+  level: "All Levels",
   price: "",
   image: "",
   published: false,
@@ -68,7 +69,10 @@ function CourseField({ id, label, error, children, className = "" }) {
   );
 }
 
-export default function AdminCourseManagement() {
+export default function AdminCourseManagement({
+  apiBase = "/api/admin/courses",
+  curriculumBase = "/admin/courses",
+}) {
   const [courses, setCourses] = useState([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -84,12 +88,12 @@ export default function AdminCourseManagement() {
   const [slugEdited, setSlugEdited] = useState(false);
 
   const fetchCourses = useCallback(async () => {
-    const result = await requestJson("/api/admin/courses");
+    const result = await requestJson(apiBase);
     if (!Array.isArray(result.courses)) {
       throw new Error("The course list response was invalid. Please retry.");
     }
     return result.courses;
-  }, []);
+  }, [apiBase]);
 
   const loadCourses = useCallback(async () => {
     setIsLoading(true);
@@ -158,6 +162,7 @@ export default function AdminCourseManagement() {
       description: course.description,
       category: course.category,
       instructor: course.instructor,
+      level: course.level || "All Levels",
       price: String(course.price),
       image: course.image,
       published: course.published,
@@ -202,8 +207,8 @@ export default function AdminCourseManagement() {
       };
       const result = await requestJson(
         editingCourse
-          ? `/api/admin/courses/${editingCourse.id}`
-          : "/api/admin/courses",
+          ? `${apiBase}/${editingCourse.id}`
+          : apiBase,
         {
           method: editingCourse ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -232,7 +237,7 @@ export default function AdminCourseManagement() {
     setBusyAction({ id: course.id, action: "publication" });
     setFeedback(null);
     try {
-      await requestJson(`/api/admin/courses/${course.id}`, {
+      await requestJson(`${apiBase}/${course.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ published: !course.published }),
@@ -260,7 +265,7 @@ export default function AdminCourseManagement() {
     setBusyAction({ id: course.id, action: "delete" });
     setFeedback(null);
     try {
-      await requestJson(`/api/admin/courses/${course.id}`, {
+      await requestJson(`${apiBase}/${course.id}`, {
         method: "DELETE",
       });
       setFeedback({
@@ -428,6 +433,24 @@ export default function AdminCourseManagement() {
                 maxLength={120}
                 required
               />
+            </CourseField>
+            <CourseField
+              id="admin-course-level"
+              label="Skill level"
+              error={fieldErrors.level}
+            >
+              <select
+                id="admin-course-level"
+                name="level"
+                value={formValues.level || "All Levels"}
+                onChange={handleFieldChange}
+                aria-invalid={Boolean(fieldErrors.level)}
+              >
+                <option value="All Levels">All Levels</option>
+                <option value="Beginner">Beginner</option>
+                <option value="Intermediate">Intermediate</option>
+                <option value="Advanced">Advanced</option>
+              </select>
             </CourseField>
             <CourseField
               id="admin-course-price"
@@ -621,7 +644,7 @@ export default function AdminCourseManagement() {
                       {course.published ? "Published" : "Draft"}
                     </span>
                   </div>
-                  <p>{course.category} · {course.instructor}</p>
+                  <p>{course.category} · {course.level || "All Levels"} · {course.instructor}</p>
                   <code>/{course.slug}</code>
                   <strong className="admin-course-price">
                     {formatPrice(course.price)}
@@ -630,7 +653,7 @@ export default function AdminCourseManagement() {
                 <div className="admin-course-actions">
                   <Link
                     className="admin-course-action"
-                    href={`/admin/courses/${course.id}/curriculum`}
+                    href={`${curriculumBase}/${course.id}/curriculum`}
                   >
                     Manage Curriculum
                   </Link>

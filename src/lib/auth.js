@@ -25,13 +25,35 @@ export function assertSessionConfiguration() {
   getSessionKey();
 }
 
-export async function issueSession(userId, rememberMe = false) {
+export async function issueSession(userId, rememberMe = false, tokenVersion = null) {
+  const resolvedUserId =
+    typeof userId === "object" && userId !== null
+      ? (userId._id?.toString() || userId.id)
+      : String(userId);
+
+  let resolvedTokenVersion = tokenVersion;
+  if (resolvedTokenVersion === null) {
+    if (
+      typeof userId === "object" &&
+      userId !== null &&
+      typeof userId.tokenVersion === "number"
+    ) {
+      resolvedTokenVersion = userId.tokenVersion;
+    } else {
+      await connectToDatabase();
+      const dbUser = await User.findById(resolvedUserId)
+        .select("tokenVersion")
+        .lean();
+      resolvedTokenVersion = dbUser?.tokenVersion ?? 0;
+    }
+  }
+
   const sessionSeconds = rememberMe
     ? REMEMBERED_SESSION_SECONDS
     : SESSION_SECONDS;
-  const token = await new SignJWT({})
+  const token = await new SignJWT({ tv: resolvedTokenVersion })
     .setProtectedHeader({ alg: "HS256" })
-    .setSubject(userId)
+    .setSubject(resolvedUserId)
     .setIssuer(SESSION_ISSUER)
     .setAudience(SESSION_AUDIENCE)
     .setIssuedAt()
@@ -51,6 +73,20 @@ export async function issueSession(userId, rememberMe = false) {
   }
 
   (await cookies()).set(SESSION_COOKIE_NAME, token, cookieOptions);
+}
+
+export async function revokeUserSessions(userId) {
+  const resolvedUserId =
+    typeof userId === "object" && userId !== null
+      ? (userId._id?.toString() || userId.id)
+      : String(userId);
+
+  await connectToDatabase();
+  return User.findByIdAndUpdate(
+    resolvedUserId,
+    { $inc: { tokenVersion: 1 } },
+    { new: true },
+  );
 }
 
 export async function clearSession() {
@@ -89,10 +125,16 @@ export async function getCurrentUser() {
 
   await connectToDatabase();
   const user = await User.findById(payload.sub)
-    .select("name email username role")
+    .select("name email username role tokenVersion")
     .lean();
 
   if (!user) {
+    return null;
+  }
+
+  const expectedTokenVersion = user.tokenVersion ?? 0;
+  const tokenVersion = typeof payload.tv === "number" ? payload.tv : 0;
+  if (tokenVersion !== expectedTokenVersion) {
     return null;
   }
 

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("../src/models/Course.js", () => ({
-  default: { countDocuments: vi.fn() },
+  default: { countDocuments: vi.fn(), find: vi.fn() },
 }));
 vi.mock("../src/models/Enrollment.js", () => ({
   default: { countDocuments: vi.fn() },
@@ -22,8 +22,12 @@ import { connectToDatabase } from "../src/lib/mongodb.js";
 import { connection } from "next/server";
 import {
   getAdminDashboardRedirect,
+  getInstructorDashboardRedirect,
 } from "../src/lib/curriculum-policy.js";
-import { getAdminDashboardStats } from "../src/lib/admin-dashboard-data.js";
+import {
+  getAdminDashboardStats,
+  getInstructorDashboardStats,
+} from "../src/lib/admin-dashboard-data.js";
 import AdminDashboardView, {
   AdminAccessError,
   AdminAccessLoading,
@@ -53,6 +57,33 @@ describe("admin dashboard authorization", () => {
     expect(getAdminDashboardRedirect({ id: "admin-id", role: "admin" })).toBe(
       null,
     );
+  });
+});
+
+describe("instructor dashboard authorization", () => {
+  it("redirects unauthenticated users to login", () => {
+    expect(getInstructorDashboardRedirect(null)).toBe("/login");
+  });
+
+  it.each(["student", "STUDENT", "guest"])(
+    "redirects users whose database role is %s to the student dashboard",
+    (role) => {
+      expect(getInstructorDashboardRedirect({ id: "user-id", role })).toBe(
+        "/dashboard",
+      );
+    },
+  );
+
+  it("allows a user with instructor role", () => {
+    expect(
+      getInstructorDashboardRedirect({ id: "inst-id", role: "instructor" }),
+    ).toBe(null);
+  });
+
+  it("allows a user with admin role", () => {
+    expect(
+      getInstructorDashboardRedirect({ id: "admin-id", role: "admin" }),
+    ).toBe(null);
   });
 });
 
@@ -119,6 +150,72 @@ describe("admin dashboard statistics", () => {
       "database unavailable",
     );
     expect(Course.countDocuments).not.toHaveBeenCalled();
+  });
+});
+
+describe("instructor dashboard statistics", () => {
+  beforeEach(() => {
+    Course.countDocuments.mockReset();
+    Course.find.mockReset();
+    Enrollment.countDocuments.mockReset();
+    connectToDatabase.mockReset().mockResolvedValue(undefined);
+    connection.mockReset().mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("counts only the instructor's courses and their enrollments", async () => {
+    const instructorId = "507f1f77bcf86cd799439011";
+    const courseId1 = "507f1f77bcf86cd799439012";
+    const courseId2 = "507f1f77bcf86cd799439013";
+
+    Course.find.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue([{ _id: courseId1 }, { _id: courseId2 }]),
+      }),
+    });
+    Course.countDocuments
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1);
+    Enrollment.countDocuments.mockResolvedValueOnce(14);
+
+    const stats = await getInstructorDashboardStats(instructorId);
+
+    expect(stats).toEqual({
+      totalCourses: 2,
+      publishedCourses: 1,
+      draftCourses: 1,
+      totalEnrollments: 14,
+    });
+    expect(Course.find).toHaveBeenCalledWith({ instructorId });
+    expect(Enrollment.countDocuments).toHaveBeenCalledWith({
+      course: { $in: [courseId1, courseId2] },
+    });
+  });
+
+  it("returns zero enrollments without querying Enrollment when instructor has no courses", async () => {
+    const instructorId = "507f1f77bcf86cd799439099";
+
+    Course.find.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue([]),
+      }),
+    });
+    Course.countDocuments
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+
+    const stats = await getInstructorDashboardStats(instructorId);
+
+    expect(stats).toEqual({
+      totalCourses: 0,
+      publishedCourses: 0,
+      draftCourses: 0,
+      totalEnrollments: 0,
+    });
+    expect(Enrollment.countDocuments).not.toHaveBeenCalled();
   });
 });
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function LessonCompletionAction({
@@ -7,6 +8,7 @@ export default function LessonCompletionAction({
   lessonId,
   initiallyCompleted,
 }) {
+  const router = useRouter();
   const [completed, setCompleted] = useState(initiallyCompleted);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -37,6 +39,7 @@ export default function LessonCompletionAction({
       }
 
       setCompleted(true);
+      router.refresh();
     } catch {
       setError("We couldn’t reach LearnHub. Please try again.");
     } finally {

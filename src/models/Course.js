@@ -138,6 +138,11 @@ const courseSchema = new mongoose.Schema(
       trim: true,
       maxlength: 120,
     },
+    instructorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      index: true,
+    },
     instructorRole: {
       type: String,
       required: true,

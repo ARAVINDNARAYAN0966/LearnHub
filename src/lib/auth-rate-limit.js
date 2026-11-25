@@ -29,8 +29,15 @@ export const AUTH_RATE_LIMITS = {
 };
 
 export function getAuthClientAddress(request) {
-  const forwardedIp = request.headers
-    .get("x-forwarded-for")
+  if (typeof request?.ip === "string") {
+    const directIp = request.ip.trim();
+    if (directIp.length <= 64 && isIP(directIp)) {
+      return directIp;
+    }
+  }
+
+  const forwardedIp = request?.headers
+    ?.get("x-forwarded-for")
     ?.split(",")[0]
     ?.trim();
   const address = forwardedIp || "";
@@ -106,6 +113,20 @@ export async function consumeAuthRateLimit(policy, identity, now = Date.now()) {
     allowed: record.count <= policy.limit,
     retryAfterSeconds,
   };
+}
+
+export async function resetAuthRateLimit(policy, identity, now = Date.now()) {
+  await connectToDatabase();
+  await ensureRateLimitIndexes();
+
+  const bucket = Math.floor(now / policy.windowMs);
+  const bucketId = [
+    policy.scope,
+    getIdentityHash(identity),
+    bucket,
+  ].join(":");
+
+  return AuthRateLimit.deleteOne({ _id: bucketId });
 }
 
 export function authRateLimitResponse(result) {
