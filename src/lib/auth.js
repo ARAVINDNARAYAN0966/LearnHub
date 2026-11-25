@@ -125,7 +125,7 @@ export async function getCurrentUser() {
 
   await connectToDatabase();
   const user = await User.findById(payload.sub)
-    .select("name email username role tokenVersion")
+    .select("name email username role tokenVersion avatarUrl")
     .lean();
 
   if (!user) {
@@ -144,5 +144,6 @@ export async function getCurrentUser() {
     email: user.email,
     username: user.username || null,
     role: user.role,
+    avatarUrl: user.avatarUrl || null,
   };
 }

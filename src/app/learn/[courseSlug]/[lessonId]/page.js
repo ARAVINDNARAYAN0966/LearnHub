@@ -5,6 +5,8 @@ import { Suspense } from "react";
 import LessonCompletionAction from "../../../../components/LessonCompletionAction";
 import LessonCurriculumSidebar from "../../../../components/LessonCurriculumSidebar";
 import ClaimCertificateButton from "../../../../components/ClaimCertificateButton";
+import LessonVideoPlayer from "../../../../components/LessonVideoPlayer";
+import LessonArticleViewer from "../../../../components/LessonArticleViewer";
 import { getCurrentUser } from "../../../../lib/auth";
 import { canManageCourse } from "../../../../lib/curriculum-policy";
 import {
@@ -19,35 +21,6 @@ import Enrollment from "../../../../models/Enrollment";
 
 export async function generateMetadata() {
   return { title: "Learning | LearnHub" };
-}
-
-function renderVideoPlayer(videoUrl) {
-  if (!videoUrl) return null;
-  const ytMatch = videoUrl.match(
-    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/,
-  );
-  if (ytMatch) {
-    return (
-      <iframe
-        className="lesson-video"
-        src={`https://www.youtube.com/embed/${ytMatch[1]}`}
-        title="Lesson video"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-      />
-    );
-  }
-  return (
-    <video
-      className="lesson-video"
-      controls
-      playsInline
-      preload="metadata"
-      src={videoUrl}
-    >
-      Your browser does not support embedded video.
-    </video>
-  );
 }
 
 export default function LessonPage({ params }) {
@@ -170,12 +143,16 @@ async function LessonDetails({ params }) {
 
             {lesson.type === "video" && lesson.videoUrl && (
               <div className="lesson-video-wrapper">
-                {renderVideoPlayer(lesson.videoUrl)}
+                <LessonVideoPlayer videoUrl={lesson.videoUrl} title={lesson.title} />
               </div>
             )}
 
             {lesson.content ? (
-              <div className="lesson-material">{lesson.content}</div>
+              lesson.type === "article" ? (
+                <LessonArticleViewer content={lesson.content} />
+              ) : (
+                <div className="lesson-material">{lesson.content}</div>
+              )
             ) : lesson.type !== "video" ? (
               <p className="lesson-material-empty">
                 Lesson material has not been added yet.

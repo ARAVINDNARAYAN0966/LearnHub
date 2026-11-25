@@ -79,10 +79,10 @@ button { cursor: pointer; }
 .brand-accent { color: var(--purple); }
 .nav-content { display: flex; align-items: center; gap: 66px; }
 .nav-links, .nav-actions { display: flex; align-items: center; }
-.nav-links { gap: 35px; }
-.nav-links a, .nav-login { color: #626174; font-size: 12px; font-weight: 550; transition: color .2s ease; }
+.nav-links { gap: 24px; }
+.nav-links a, .nav-login { color: #626174; font-size: 12px; font-weight: 550; transition: color .2s ease; white-space: nowrap; }
 .nav-links a:hover, .nav-login:hover { color: var(--purple); }
-.nav-actions { gap: 27px; }
+.nav-actions { gap: 18px; flex-shrink: 0; }
 .logout-control { display: flex; align-items: center; gap: 8px; }
 .nav-logout { padding: 0; border: 0; background: transparent; cursor: pointer; font: inherit; }
 .nav-logout:disabled { cursor: wait; opacity: .65; }
@@ -376,9 +376,32 @@ button { cursor: pointer; }
 .lesson-header > p.lesson-module-description { margin-top: 8px; color: #898795; font-size: 10px; }
 .lesson-meta { display: flex; flex-wrap: wrap; gap: 9px 20px; margin-top: 16px; color: #898795; font-size: 9px; }
 .lesson-meta span + span::before { content: "·"; margin-right: 20px; color: #b4b0bf; }
-.lesson-video { width: 100%; max-height: 540px; display: block; margin-top: 26px; border-radius: 5px; background: #17172f; border: 0; }
+.lesson-video { width: 100%; aspect-ratio: 16/9; max-height: 540px; display: block; margin-top: 26px; border-radius: 8px; background: #17172f; border: 0; }
+.video-player-container { margin-top: 26px; position: relative; width: 100%; }
+.video-player-container .lesson-video { margin-top: 0; }
+.video-error-state { padding: 32px 24px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-subtle); text-align: center; }
+.video-error-icon { font-size: 28px; display: block; margin-bottom: 8px; }
+.video-error-state h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; color: var(--ink); }
+.video-error-state p { margin: 0 0 16px; font-size: 12px; color: var(--ink-light); }
+.video-error-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.video-loading-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(23, 23, 47, 0.7); color: #fff; font-size: 12px; border-radius: 8px; z-index: 2; pointer-events: none; }
 .lesson-material, .lesson-material-empty { margin: 27px 0 0; padding: 21px; border-radius: 5px; background: var(--surface-subtle); color: #565366; font-size: 12px; line-height: 1.9; white-space: pre-wrap; }
 .lesson-material-empty { color: #858290; }
+
+/* Lesson Article Styling */
+.lesson-article { margin-top: 26px; line-height: 1.8; color: var(--ink); }
+.article-h2 { font-size: 20px; font-weight: 700; color: var(--ink); margin: 32px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.article-h3 { font-size: 15px; font-weight: 600; color: var(--ink); margin: 24px 0 10px; }
+.article-p { margin: 0 0 14px; font-size: 13.5px; color: var(--ink-light); line-height: 1.75; }
+.article-list { margin: 0 0 16px; padding-left: 20px; list-style-type: disc; }
+.article-list-item { margin-bottom: 8px; font-size: 13px; color: var(--ink-light); line-height: 1.65; }
+.article-code-wrapper { margin: 18px 0 22px; border-radius: 8px; background: #1e1e2e; border: 1px solid rgba(255, 255, 255, 0.1); overflow: hidden; }
+.article-code-header { display: flex; justify-content: space-between; align-items: center; padding: 7px 14px; background: #181825; border-bottom: 1px solid rgba(255, 255, 255, 0.08); font-size: 11px; font-family: monospace; color: #a6adc8; text-transform: uppercase; }
+.article-copy-btn { background: transparent; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; color: #cdd6f4; font-size: 10px; padding: 2px 8px; cursor: pointer; transition: all .2s; }
+.article-copy-btn:hover { background: rgba(255, 255, 255, 0.1); }
+.article-code-pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12.5px; line-height: 1.6; color: #cdd6f4; }
+.article-callout { margin: 24px 0; padding: 14px 18px; border-left: 4px solid var(--purple); background: var(--surface-subtle); border-radius: 0 8px 8px 0; }
+.article-callout-title { font-size: 12.5px; font-weight: 600; color: var(--purple-dark); margin-bottom: 4px; }
 .lesson-completion { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 22px; }
 .lesson-completion .button { min-height: 42px; }
 .lesson-completed { margin: 0; color: #4a805a; font-size: 11px; font-weight: 650; }
@@ -835,9 +858,16 @@ button { cursor: pointer; }
 :root[data-theme="dark"] .button-outline { background-color: var(--surface); }
 :root[data-theme="dark"] .lesson-material,
 :root[data-theme="dark"] .lesson-material-empty,
+:root[data-theme="dark"] .video-error-state,
+:root[data-theme="dark"] .article-callout,
 :root[data-theme="dark"] .lesson-navigation-link {
   background-color: var(--surface-alt);
 }
+:root[data-theme="dark"] .article-callout-title { color: #d3c4ff; }
+:root[data-theme="dark"] .article-h2,
+:root[data-theme="dark"] .article-h3 { color: #f2efff; }
+:root[data-theme="dark"] .article-p,
+:root[data-theme="dark"] .article-list-item { color: #c0bdd0; }
 :root[data-theme="dark"] .curriculum-lesson-link:hover {
   background: var(--surface-alt);
   color: #c5b4ff;
@@ -1310,7 +1340,9 @@ body,
 .admin-curriculum-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 13px; padding: 12px 15px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
 .admin-curriculum-footer p { margin: 0; color: var(--muted); font-size: 9px; }
 
-.curriculum-row { grid-template-columns: 30px minmax(0, 1fr) minmax(60px, auto) auto; }
+.curriculum-row { grid-template-columns: 32px minmax(140px, 1fr) minmax(0, 1.8fr) auto; gap: 10px; }
+.curriculum-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.curriculum-row > span:nth-last-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-light); font-size: 9px; }
 .curriculum-lock-state { padding: 4px 7px; border-radius: 999px; background: #f4f0e8; color: #80643e; font-size: 7px; font-weight: 650; text-align: center; white-space: nowrap; }
 .curriculum-lock-state-open { background: #e8f0e9; color: #497459; }
 .curriculum-locked-note,

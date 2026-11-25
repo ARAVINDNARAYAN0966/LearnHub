@@ -26,6 +26,7 @@ export default function Footer() {
             <h3>LearnHub</h3>
             <Link href="/#about">Our story</Link>
             <Link href="/register">Become a student</Link>
+            <Link href="/feedback">Platform Feedback</Link>
             <a href="mailto:hello@learnhub.example">Contact us</a>
           </div>
           <div className="footer-newsletter">

@@ -1,7 +1,10 @@
 import Link from "next/link";
+import { connection } from "next/server";
+import { Suspense } from "react";
 import CourseCard from "../components/CourseCard";
 import HomeSearch from "../components/HomeSearch";
-import { categories, courses } from "../lib/courses";
+import { categories } from "../lib/courses";
+import { getPublishedCourses } from "../lib/course-data";
 
 const testimonials = [
   {
@@ -84,9 +87,15 @@ export default function Home() {
             <Link className="text-link" href="/courses">All courses <span aria-hidden="true">↗</span></Link>
           </div>
           <HomeSearch />
-          <div className="course-grid course-grid-featured">
-            {courses.slice(0, 3).map((course) => <CourseCard key={course.slug} course={course} />)}
-          </div>
+          <Suspense
+            fallback={
+              <div className="course-grid course-grid-featured">
+                <p className="catalog-loading">Finding your next class...</p>
+              </div>
+            }
+          >
+            <FeaturedCourses />
+          </Suspense>
         </section>
 
         <section className="category-section" id="categories">
@@ -163,5 +172,24 @@ export default function Home() {
         </section>
       </main>
     </>
+  );
+}
+
+async function FeaturedCourses() {
+  await connection();
+  let publishedCourses = [];
+  try {
+    publishedCourses = await getPublishedCourses();
+  } catch {
+    publishedCourses = [];
+  }
+  const featuredCourses = publishedCourses.slice(0, 3);
+
+  return (
+    <div className="course-grid course-grid-featured">
+      {featuredCourses.map((course) => (
+        <CourseCard key={course.slug} course={course} />
+      ))}
+    </div>
   );
 }

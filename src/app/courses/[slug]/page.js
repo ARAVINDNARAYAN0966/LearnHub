@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, permanentRedirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import CourseCard from "../../../components/CourseCard";
@@ -17,9 +17,7 @@ import { formatPrice } from "../../../lib/format-price";
 export async function generateMetadata({ params }) {
   await connection();
   const { slug } = await params;
-  const canonicalSlug =
-    slug === "product-design-figma" ? "product-design" : slug;
-  const course = await getPublishedCourseBySlug(canonicalSlug);
+  const course = await getPublishedCourseBySlug(slug);
   return { title: course ? course.title : "Course not found" };
 }
 
@@ -34,10 +32,6 @@ export default function CoursePage({ params }) {
 async function CourseDetails({ params }) {
   await connection();
   const { slug } = await params;
-  if (slug === "product-design-figma") {
-    permanentRedirect("/courses/product-design");
-  }
-
   const course = await getPublishedCourseBySlug(slug);
   if (!course) notFound();
 

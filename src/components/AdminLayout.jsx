@@ -5,6 +5,7 @@ const adminNavigation = [
   { id: "overview", label: "Overview", href: "/admin", icon: "▦" },
   { id: "courses", label: "Courses", href: "/admin/courses", icon: "◫" },
   { id: "users", label: "Users", href: "/admin/users", icon: "👥" },
+  { id: "feedback", label: "Feedback", href: "/admin/feedback", icon: "💬" },
 ];
 
 const instructorNavigation = [

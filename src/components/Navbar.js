@@ -10,6 +10,7 @@ const links = [
   { label: "Home", href: "/" },
   { label: "Courses", href: "/courses" },
   { label: "Categories", href: "/courses#categories" },
+  { label: "Feedback", href: "/feedback" },
   { label: "About", href: "/#about" },
 ];
 
@@ -125,6 +126,26 @@ export default function Navbar() {
                   onClick={() => setMenuOpen(false)}
                 >
                   My learning
+                </Link>
+                <Link
+                  className="nav-login inline-flex items-center gap-1.5"
+                  href="/profile"
+                  onClick={() => setMenuOpen(false)}
+                  title="My Profile"
+                >
+                  {currentUser.avatarUrl ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={currentUser.avatarUrl}
+                      alt={currentUser.name || "Profile"}
+                      className="w-5 h-5 rounded-full object-cover inline-block"
+                    />
+                  ) : (
+                    <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold inline-flex items-center justify-center">
+                      {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : "U"}
+                    </span>
+                  )}
+                  <span>Profile</span>
                 </Link>
                 <LogoutButton />
               </>
